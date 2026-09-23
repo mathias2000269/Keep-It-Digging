@@ -6,6 +6,19 @@ const money = value => new Intl.NumberFormat('es-ES', { style: 'currency', curre
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
 const statusNames = { pending:'Pendiente', preparing:'Preparando', ready:'Listo', completed:'Completado', cancelled:'Cancelado' };
 const roleNames = { customer:'Cliente', worker:'Trabajador', admin:'Administrador' };
+const hiddenLoginEmail = username => `${normalizeUsername(username)}@users.keepitdigging.invalid`;
+function normalizeUsername(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '.')
+    .replace(/[^a-z0-9._-]/g, '')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 24);
+}
 const defaultProducts = [
   { id:1, name:'Hierro', price:85, category:'Metal industrial', image_url:'assets/logo.png', description:'Resistente, versátil y preparado para cualquier proyecto.' },
   { id:2, name:'Cobre', price:120, category:'Metal conductor', image_url:'assets/logo.png', description:'Perfecto para cableado, componentes y encargos especiales.' },
@@ -20,6 +33,8 @@ let products = [];
 let cart = JSON.parse(localStorage.getItem('kid-cart') || '[]');
 let staffOrders = [];
 let activeOrderFilter = 'all';
+let inquiries = [];
+let activeInquiryFilter = 'all';
 
 function toast(message, error = false) {
   document.querySelector('.toast')?.remove();
@@ -90,7 +105,7 @@ function showAccountMenu(event) {
   const menu = document.createElement('div');
   menu.className = 'account-menu';
   if (currentSession && currentProfile) {
-    menu.innerHTML = `<strong>${escapeHTML(currentProfile.full_name || 'Mi cuenta')}</strong><small>${escapeHTML(currentSession.user.email)}</small><a href="cuenta.html">Mi perfil y pedidos</a>${['worker','admin'].includes(currentProfile.role) ? '<a href="panel.html">Panel interno</a>' : ''}<button type="button" data-signout>Cerrar sesión</button>`;
+    menu.innerHTML = `<strong>${escapeHTML(currentProfile.full_name || 'Mi cuenta')}</strong><small>@${escapeHTML(currentProfile.username)}</small><a href="cuenta.html">Mi perfil y pedidos</a>${['worker','admin'].includes(currentProfile.role) ? '<a href="panel.html">Panel interno</a>' : ''}<button type="button" data-signout>Cerrar sesión</button>`;
     menu.querySelector('[data-signout]').addEventListener('click', async () => { await db.auth.signOut(); location.href = 'index.html'; });
   } else {
     menu.innerHTML = `<strong>Zona de usuario</strong><small>${backendReady ? 'Accede para realizar pedidos' : 'Falta conectar Supabase'}</small><a href="cuenta.html">Iniciar sesión</a><a href="cuenta.html?registro=1">Crear cuenta</a>`;
@@ -217,6 +232,16 @@ function initAuthTabs() {
     document.querySelector('#login-form').hidden = tab.dataset.authTab !== 'login';
     document.querySelector('#register-form').hidden = tab.dataset.authTab !== 'register';
   }));
+  const registerForm = document.querySelector('#register-form');
+  const preview = document.querySelector('#username-preview');
+  const updatePreview = () => {
+    const fullName = registerForm?.elements.full_name.value || '';
+    const selected = registerForm?.elements.username.value || fullName;
+    const normalized = normalizeUsername(selected);
+    if (preview) preview.textContent = normalized ? `Tu usuario será @${normalized}` : 'Podrás iniciar sesión con este nombre.';
+  };
+  registerForm?.elements.full_name.addEventListener('input', updatePreview);
+  registerForm?.elements.username.addEventListener('input', updatePreview);
   if (new URLSearchParams(location.search).get('registro')) document.querySelector('[data-auth-tab="register"]')?.click();
 }
 
@@ -227,17 +252,33 @@ async function initAccountPage() {
   if (currentSession) return showProfile();
   document.querySelector('#login-form').addEventListener('submit', async event => {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    const { error } = await db.auth.signInWithPassword({ email:form.get('email'), password:form.get('password') });
-    if (error) return setAuthMessage('Correo o contraseña incorrectos.');
+    const username = normalizeUsername(form.get('username'));
+    const { error } = await db.auth.signInWithPassword({ email:hiddenLoginEmail(username), password:form.get('password') });
+    if (error) return setAuthMessage('Usuario o contraseña incorrectos.');
     const destination = localStorage.getItem('kid-return'); localStorage.removeItem('kid-return');
     location.href = destination || 'cuenta.html';
   });
   document.querySelector('#register-form').addEventListener('submit', async event => {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    const { data, error } = await db.auth.signUp({ email:form.get('email'), password:form.get('password'), options:{ data:{ full_name:form.get('full_name'), phone:form.get('phone') } } });
-    if (error) return setAuthMessage(error.message);
-    setAuthMessage(data.session ? 'Cuenta creada correctamente.' : 'Cuenta creada. Revisa tu correo para confirmarla.');
-    if (data.session) setTimeout(() => location.reload(), 800);
+    const fullName = form.get('full_name').trim();
+    const username = normalizeUsername(form.get('username') || fullName);
+    const phone = form.get('phone').trim();
+    const password = form.get('password');
+    if (!/^[a-z0-9._-]{3,24}$/.test(username)) return setAuthMessage('El usuario debe tener entre 3 y 24 caracteres válidos.');
+    setAuthMessage('Creando la cuenta…');
+    const { data, error } = await db.functions.invoke('register-user', { body:{ fullName, username, phone, password } });
+    if (error || data?.error) {
+      let message = data?.error || 'No se pudo crear la cuenta.';
+      if (error?.context) {
+        try { message = (await error.context.json()).error || message; } catch {}
+      }
+      return setAuthMessage(message);
+    }
+    const login = await db.auth.signInWithPassword({ email:hiddenLoginEmail(username), password });
+    if (login.error) return setAuthMessage(`Cuenta creada. Tu usuario es @${username}. Ya puedes iniciar sesión.`);
+    setAuthMessage(`Cuenta creada. Tu usuario es @${username}.`);
+    const destination = localStorage.getItem('kid-return'); localStorage.removeItem('kid-return');
+    setTimeout(() => { location.href = destination || 'cuenta.html'; }, 700);
   });
 }
 
@@ -247,7 +288,7 @@ async function showProfile() {
   document.querySelector('#auth-view').hidden = true;
   document.querySelector('#profile-view').hidden = false;
   document.querySelector('#profile-name').textContent = currentProfile?.full_name || 'Bienvenido';
-  document.querySelector('#profile-role').textContent = `${roleNames[currentProfile?.role] || 'Cliente'} · ${currentSession.user.email}`;
+  document.querySelector('#profile-role').textContent = `${roleNames[currentProfile?.role] || 'Cliente'} · @${currentProfile?.username || ''}`;
   document.querySelector('#logout-button').addEventListener('click', async () => { await db.auth.signOut(); location.reload(); });
   const { data: orders } = await db.from('orders').select('*, order_items(*)').eq('user_id', currentSession.user.id).order('created_at', { ascending:false });
   const orderTarget = document.querySelector('#my-orders');
@@ -274,15 +315,31 @@ async function initPanel() {
   const isAdmin = currentProfile.role === 'admin';
   document.querySelector('#admin-stats').hidden = !isAdmin;
   document.querySelectorAll('.admin-only').forEach(element => element.hidden = !isAdmin);
-  initPanelTabs(); initOrderFilters();
+  initPanelTabs(); initOrderFilters(); initMessageTabs(); initInquiryFilters();
   await loadStaffOrders();
-  if (isAdmin) { await loadApplications(); await loadAdminProducts(); await loadWorkers(); }
+  if (isAdmin) { await loadApplications(); await loadInquiries(); await loadAdminProducts(); await loadWorkers(); }
 }
 
 function initPanelTabs() {
   document.querySelectorAll('.panel-tab').forEach(tab => tab.addEventListener('click', () => {
     document.querySelectorAll('.panel-tab').forEach(item => item.classList.toggle('is-active', item === tab));
-    ['orders','catalog','applications','workers'].forEach(name => { document.querySelector(`#${name}-panel`).hidden = tab.dataset.panel !== name; });
+    ['orders','catalog','messages','workers'].forEach(name => { document.querySelector(`#${name}-panel`).hidden = tab.dataset.panel !== name; });
+  }));
+}
+
+function initMessageTabs() {
+  document.querySelectorAll('.secondary-tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.secondary-tab').forEach(item => item.classList.toggle('is-active', item === tab));
+    document.querySelector('#applications-view').hidden = tab.dataset.messagePanel !== 'applications';
+    document.querySelector('#inquiries-view').hidden = tab.dataset.messagePanel !== 'inquiries';
+  }));
+}
+
+function initInquiryFilters() {
+  document.querySelectorAll('[data-inquiry-filter]').forEach(button => button.addEventListener('click', () => {
+    activeInquiryFilter = button.dataset.inquiryFilter;
+    document.querySelectorAll('[data-inquiry-filter]').forEach(item => item.classList.toggle('is-active', item === button));
+    renderInquiries();
   }));
 }
 
@@ -343,9 +400,46 @@ async function loadApplications() {
   const { data, error } = await db.from('job_applications').select('*').order('created_at', { ascending:false });
   if (error) return;
   document.querySelector('#pending-applications').textContent = data.filter(item => item.status === 'pending').length;
+  document.querySelector('#application-tab-count').textContent = data.filter(item => item.status === 'pending').length;
   const target = document.querySelector('#applications-list');
   target.innerHTML = data.length ? data.map(item => `<article class="application-card"><div><h3>${escapeHTML(item.applicant_name)}</h3><p>${new Date(item.created_at).toLocaleDateString('es-ES')} · ${item.status}</p><p>${escapeHTML(item.message || 'Sin mensaje')}</p></div><div class="row-actions"><button class="approve" data-review="approved" data-id="${item.id}" type="button">Aceptar</button><button data-review="pending" data-id="${item.id}" type="button">En espera</button><button class="danger" data-review="rejected" data-id="${item.id}" type="button">Rechazar</button></div></article>`).join('') : '<p class="loading-message">No hay solicitudes.</p>';
   target.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
+}
+
+async function loadInquiries() {
+  const { data, error } = await db.from('inquiries').select('*').order('created_at', { ascending:false });
+  if (error) return toast('No se pudieron cargar las dudas.', true);
+  inquiries = data || [];
+  const pending = inquiries.filter(item => item.status === 'new').length;
+  document.querySelector('#pending-inquiries').textContent = pending;
+  document.querySelector('#inquiry-tab-count').textContent = pending;
+  renderInquiries();
+}
+
+function renderInquiries() {
+  const target = document.querySelector('#inquiries-list');
+  if (!target) return;
+  const visible = activeInquiryFilter === 'all' ? inquiries : inquiries.filter(item => item.status === activeInquiryFilter);
+  target.innerHTML = visible.length ? visible.map(item => `<article class="application-card inquiry-card${item.status === 'resolved' ? ' is-resolved' : ''}"><div><h3>${escapeHTML(item.name)}</h3><p>${new Date(item.created_at).toLocaleString('es-ES')} · Tel. ${escapeHTML(item.phone)}</p><p class="inquiry-text">${escapeHTML(item.message)}</p></div><div class="row-actions">${item.status === 'new' ? `<button class="approve" type="button" data-inquiry-status="resolved" data-id="${item.id}">Marcar resuelta</button>` : `<button type="button" data-inquiry-status="new" data-id="${item.id}">Reabrir</button>`}<button class="danger" type="button" data-delete-inquiry="${item.id}">Eliminar</button></div></article>`).join('') : '<p class="loading-message">No hay dudas en esta sección.</p>';
+  target.querySelectorAll('[data-inquiry-status]').forEach(button => button.addEventListener('click', updateInquiryStatus));
+  target.querySelectorAll('[data-delete-inquiry]').forEach(button => button.addEventListener('click', deleteInquiry));
+}
+
+async function updateInquiryStatus(event) {
+  const status = event.currentTarget.dataset.inquiryStatus;
+  const resolvedAt = status === 'resolved' ? new Date().toISOString() : null;
+  const { error } = await db.from('inquiries').update({ status, resolved_at:resolvedAt }).eq('id', event.currentTarget.dataset.id);
+  if (error) return toast('No se pudo actualizar la duda.', true);
+  toast(status === 'resolved' ? 'Duda marcada como resuelta.' : 'Duda reabierta.');
+  await loadInquiries();
+}
+
+async function deleteInquiry(event) {
+  if (!confirm('¿Eliminar esta duda definitivamente?')) return;
+  const { error } = await db.from('inquiries').delete().eq('id', event.currentTarget.dataset.deleteInquiry);
+  if (error) return toast('No se pudo eliminar la duda.', true);
+  toast('Duda eliminada.');
+  await loadInquiries();
 }
 
 async function reviewApplication(event) {
@@ -355,10 +449,10 @@ async function reviewApplication(event) {
 }
 
 async function loadWorkers() {
-  const { data, error } = await db.from('profiles').select('id, full_name, email, created_at').eq('role', 'worker').order('full_name');
+  const { data, error } = await db.from('profiles').select('id, full_name, username, created_at').eq('role', 'worker').order('full_name');
   if (error) return toast('No se pudo cargar el equipo.', true);
   const target = document.querySelector('#workers-list');
-  target.innerHTML = data.length ? data.map(worker => `<article class="application-card"><div><h3>${escapeHTML(worker.full_name || 'Sin nombre')}</h3><p>${escapeHTML(worker.email)}</p><p>Trabajador desde ${new Date(worker.created_at).toLocaleDateString('es-ES')}</p></div><div class="row-actions"><button class="danger" type="button" data-remove-worker="${worker.id}">Quitar permisos</button></div></article>`).join('') : '<p class="loading-message">No hay trabajadores activos.</p>';
+  target.innerHTML = data.length ? data.map(worker => `<article class="application-card"><div><h3>${escapeHTML(worker.full_name || 'Sin nombre')}</h3><p>@${escapeHTML(worker.username)}</p><p>Trabajador desde ${new Date(worker.created_at).toLocaleDateString('es-ES')}</p></div><div class="row-actions"><button class="danger" type="button" data-remove-worker="${worker.id}">Quitar permisos</button></div></article>`).join('') : '<p class="loading-message">No hay trabajadores activos.</p>';
   target.querySelectorAll('[data-remove-worker]').forEach(button => button.addEventListener('click', removeWorker));
 }
 
@@ -410,6 +504,29 @@ async function deleteProduct(event) {
   toast('Material eliminado.'); await loadAdminProducts();
 }
 
+function initInquiryForm() {
+  const form = document.querySelector('#inquiry-form');
+  if (!form) return;
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const messageTarget = document.querySelector('#inquiry-message');
+    if (!db) { messageTarget.textContent = 'El formulario todavía no está conectado a la base de datos.'; return; }
+    const data = new FormData(form);
+    const payload = {
+      name:data.get('name').trim(),
+      phone:data.get('phone').trim(),
+      message:data.get('message').trim(),
+    };
+    if (!/^[0-9]{5,15}$/.test(payload.phone)) { messageTarget.textContent = 'El teléfono debe contener solo entre 5 y 15 números.'; return; }
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true; button.textContent = 'Enviando…'; messageTarget.textContent = '';
+    const { error } = await db.from('inquiries').insert(payload);
+    button.disabled = false; button.innerHTML = 'Enviar duda <span>↗</span>';
+    if (error) { messageTarget.textContent = 'No se pudo enviar la duda. Inténtalo de nuevo.'; return; }
+    form.reset(); messageTarget.textContent = 'Duda enviada correctamente.'; toast('Duda enviada con éxito.');
+  });
+}
+
 function showQueryToast() {
   const params = new URLSearchParams(location.search);
   if (params.get('duda') === 'ok') { toast('Duda enviada con éxito.'); history.replaceState({}, '', location.pathname); }
@@ -418,7 +535,7 @@ function showQueryToast() {
 
 async function start() {
   initNavigation(); initCarousel(); await loadSession();
-  await initCatalog(); await initAccountPage(); await initPanel();
+  await initCatalog(); await initAccountPage(); await initPanel(); initInquiryForm();
   showQueryToast();
 }
 

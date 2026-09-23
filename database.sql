@@ -1,15 +1,23 @@
--- K.I.D. Mining Co. · Ejecuta este archivo completo en Supabase > SQL Editor.
+-- K.I.D. Mining Co. · Instalación inicial de Supabase.
+-- Ejecuta el archivo completo una sola vez en un proyecto vacío.
+
 create extension if not exists pgcrypto;
+create extension if not exists citext;
+
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to anon, authenticated;
 
 create type public.user_role as enum ('customer', 'worker', 'admin');
 create type public.application_status as enum ('pending', 'approved', 'rejected');
 create type public.order_status as enum ('pending', 'preparing', 'ready', 'completed', 'cancelled');
+create type public.inquiry_status as enum ('new', 'resolved');
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  email text not null,
-  full_name text not null default '',
-  phone text not null default '',
+  username citext not null unique check (username::text ~ '^[a-z0-9._-]{3,24}$'),
+  full_name text not null check (char_length(trim(full_name)) between 2 and 80),
+  phone text not null check (phone ~ '^[0-9]{5,15}$'),
   role public.user_role not null default 'customer',
   created_at timestamptz not null default now()
 );
@@ -55,39 +63,77 @@ create table public.job_applications (
   reviewed_at timestamptz
 );
 
-create or replace function public.handle_new_user()
-returns trigger language plpgsql security definer set search_path = public as $$
+create table public.inquiries (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(trim(name)) between 2 and 80),
+  phone text not null check (phone ~ '^[0-9]{5,15}$'),
+  message text not null check (char_length(trim(message)) between 5 and 2000),
+  status public.inquiry_status not null default 'new',
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+
+create index profiles_role_idx on public.profiles (role);
+create index orders_user_created_idx on public.orders (user_id, created_at desc);
+create index orders_status_created_idx on public.orders (status, created_at desc);
+create index order_items_order_idx on public.order_items (order_id);
+create index applications_status_created_idx on public.job_applications (status, created_at desc);
+create index inquiries_status_created_idx on public.inquiries (status, created_at desc);
+
+create or replace function private.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
-  insert into public.profiles (id, email, full_name, phone)
+  insert into public.profiles (id, username, full_name, phone)
   values (
     new.id,
-    coalesce(new.email, ''),
-    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
-    coalesce(new.raw_user_meta_data ->> 'phone', '')
+    new.raw_user_meta_data ->> 'username',
+    new.raw_user_meta_data ->> 'full_name',
+    new.raw_user_meta_data ->> 'phone'
   );
   return new;
 end;
 $$;
 
+revoke all on function private.handle_new_user() from public;
+
 create trigger on_auth_user_created
 after insert on auth.users
-for each row execute function public.handle_new_user();
+for each row execute function private.handle_new_user();
 
-create or replace function public.is_staff()
-returns boolean language sql stable security definer set search_path = public as $$
+create or replace function private.is_staff()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
   select exists (
     select 1 from public.profiles
-    where id = auth.uid() and role in ('worker', 'admin')
+    where id = (select auth.uid()) and role in ('worker', 'admin')
   );
 $$;
 
-create or replace function public.is_admin()
-returns boolean language sql stable security definer set search_path = public as $$
+create or replace function private.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
   select exists (
     select 1 from public.profiles
-    where id = auth.uid() and role = 'admin'
+    where id = (select auth.uid()) and role = 'admin'
   );
 $$;
+
+revoke all on function private.is_staff() from public;
+revoke all on function private.is_admin() from public;
+grant execute on function private.is_staff() to anon, authenticated;
+grant execute on function private.is_admin() to authenticated;
 
 create or replace function public.place_order(
   p_customer_name text,
@@ -95,23 +141,29 @@ create or replace function public.place_order(
   p_notes text,
   p_items jsonb
 )
-returns uuid language plpgsql security definer set search_path = public as $$
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
   v_order_id uuid;
   v_total numeric(12,2);
   v_requested integer;
   v_valid integer;
 begin
-  if auth.uid() is null then raise exception 'Debes iniciar sesión'; end if;
+  if (select auth.uid()) is null then raise exception 'Debes iniciar sesión'; end if;
   if trim(p_customer_name) = '' then raise exception 'Falta el nombre'; end if;
   if p_phone !~ '^[0-9]{5,15}$' then raise exception 'Teléfono no válido'; end if;
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'El carrito está vacío';
   end if;
 
-  select count(*) into v_requested from jsonb_to_recordset(p_items) as x(product_id bigint, quantity integer);
+  select count(*) into v_requested
+  from jsonb_to_recordset(p_items) as x(product_id bigint, quantity integer);
+
   select count(*), coalesce(sum(p.price * x.quantity), 0)
-    into v_valid, v_total
+  into v_valid, v_total
   from jsonb_to_recordset(p_items) as x(product_id bigint, quantity integer)
   join public.products p on p.id = x.product_id and p.active
   where x.quantity > 0;
@@ -119,7 +171,7 @@ begin
   if v_valid <> v_requested then raise exception 'Hay productos o cantidades no válidos'; end if;
 
   insert into public.orders (user_id, customer_name, phone, notes, total)
-  values (auth.uid(), trim(p_customer_name), p_phone, coalesce(p_notes, ''), v_total)
+  values ((select auth.uid()), trim(p_customer_name), p_phone, coalesce(p_notes, ''), v_total)
   returning id into v_order_id;
 
   insert into public.order_items (order_id, product_id, product_name, unit_price, quantity)
@@ -131,19 +183,33 @@ begin
 end;
 $$;
 
-create or replace function public.review_application(p_application_id uuid, p_decision public.application_status)
-returns void language plpgsql security definer set search_path = public as $$
+create or replace function public.review_application(
+  p_application_id uuid,
+  p_decision public.application_status
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare v_user_id uuid;
 begin
-  if not public.is_admin() then raise exception 'Acceso denegado'; end if;
+  if not private.is_admin() then raise exception 'Acceso denegado'; end if;
+
   update public.job_applications
-  set status = p_decision, reviewed_at = case when p_decision = 'pending' then null else now() end
-  where id = p_application_id returning user_id into v_user_id;
+  set status = p_decision,
+      reviewed_at = case when p_decision = 'pending' then null else now() end
+  where id = p_application_id
+  returning user_id into v_user_id;
+
   if v_user_id is null then raise exception 'Solicitud no encontrada'; end if;
+
   if p_decision = 'approved' then
-    update public.profiles set role = 'worker' where id = v_user_id and role = 'customer';
+    update public.profiles set role = 'worker'
+    where id = v_user_id and role = 'customer';
   elsif p_decision = 'rejected' then
-    update public.profiles set role = 'customer' where id = v_user_id and role <> 'admin';
+    update public.profiles set role = 'customer'
+    where id = v_user_id and role <> 'admin';
   end if;
 end;
 $$;
@@ -158,59 +224,91 @@ alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.job_applications enable row level security;
+alter table public.inquiries enable row level security;
 
 create policy "profiles_read_own_or_admin" on public.profiles
-for select using (id = auth.uid() or public.is_admin());
+for select to authenticated
+using (id = (select auth.uid()) or private.is_admin());
 
 create policy "profiles_admin_update" on public.profiles
-for update using (public.is_admin()) with check (public.is_admin());
+for update to authenticated
+using (private.is_admin()) with check (private.is_admin());
 
 create policy "products_public_read" on public.products
-for select using (active or public.is_staff());
+for select to anon, authenticated
+using (active or private.is_staff());
 
 create policy "products_admin_insert" on public.products
-for insert with check (public.is_admin());
+for insert to authenticated with check (private.is_admin());
 
 create policy "products_admin_update" on public.products
-for update using (public.is_admin()) with check (public.is_admin());
+for update to authenticated
+using (private.is_admin()) with check (private.is_admin());
 
 create policy "products_admin_delete" on public.products
-for delete using (public.is_admin());
-
-create policy "orders_insert_own" on public.orders
-for insert to authenticated with check (user_id = auth.uid());
+for delete to authenticated using (private.is_admin());
 
 create policy "orders_read_own_or_staff" on public.orders
-for select to authenticated using (user_id = auth.uid() or public.is_staff());
+for select to authenticated
+using (user_id = (select auth.uid()) or private.is_staff());
 
 create policy "orders_staff_update" on public.orders
-for update to authenticated using (public.is_staff()) with check (public.is_staff());
+for update to authenticated
+using (private.is_staff()) with check (private.is_staff());
 
 create policy "orders_staff_delete" on public.orders
-for delete to authenticated using (public.is_staff());
-
-create policy "items_insert_own_order" on public.order_items
-for insert to authenticated with check (
-  exists (select 1 from public.orders where id = order_id and user_id = auth.uid())
-);
+for delete to authenticated using (private.is_staff());
 
 create policy "items_read_own_or_staff" on public.order_items
-for select to authenticated using (
-  public.is_staff() or exists (
-    select 1 from public.orders where id = order_id and user_id = auth.uid()
+for select to authenticated
+using (
+  private.is_staff() or exists (
+    select 1 from public.orders
+    where id = order_id and user_id = (select auth.uid())
   )
 );
 
 create policy "applications_insert_own" on public.job_applications
-for insert to authenticated with check (user_id = auth.uid());
+for insert to authenticated
+with check (user_id = (select auth.uid()));
 
 create policy "applications_read_own_or_admin" on public.job_applications
-for select to authenticated using (user_id = auth.uid() or public.is_admin());
+for select to authenticated
+using (user_id = (select auth.uid()) or private.is_admin());
 
 create policy "applications_admin_update" on public.job_applications
-for update to authenticated using (public.is_admin()) with check (public.is_admin());
+for update to authenticated
+using (private.is_admin()) with check (private.is_admin());
 
--- Productos iniciales. Puedes cambiarlos después desde el panel de administrador.
+create policy "inquiries_public_insert" on public.inquiries
+for insert to anon, authenticated
+with check (
+  status = 'new'
+  and phone ~ '^[0-9]{5,15}$'
+  and char_length(trim(name)) between 2 and 80
+  and char_length(trim(message)) between 5 and 2000
+);
+
+create policy "inquiries_admin_read" on public.inquiries
+for select to authenticated using (private.is_admin());
+
+create policy "inquiries_admin_update" on public.inquiries
+for update to authenticated
+using (private.is_admin()) with check (private.is_admin());
+
+create policy "inquiries_admin_delete" on public.inquiries
+for delete to authenticated using (private.is_admin());
+
+grant select on public.products to anon, authenticated;
+grant select, update on public.profiles to authenticated;
+grant insert, update, delete on public.products to authenticated;
+grant select, update, delete on public.orders to authenticated;
+grant select on public.order_items to authenticated;
+grant select, insert, update on public.job_applications to authenticated;
+grant insert on public.inquiries to anon, authenticated;
+grant select, update, delete on public.inquiries to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 insert into public.products (name, price, category, image_url, description) values
 ('Hierro', 85, 'Metal industrial', 'assets/logo.png', 'Resistente, versátil y preparado para cualquier proyecto.'),
 ('Cobre', 120, 'Metal conductor', 'assets/logo.png', 'Perfecto para cableado, componentes y encargos especiales.'),
@@ -219,6 +317,5 @@ insert into public.products (name, price, category, image_url, description) valu
 ('Plata', 310, 'Metal precioso', 'assets/logo.png', 'Elegante, limpia y seleccionada a mano.'),
 ('Diamante', 950, 'Gema premium', 'assets/logo.png', 'Difícil de encontrar e imposible de ignorar.');
 
--- Después de registrarte con tu cuenta de administrador, ejecuta SOLO esta línea
--- cambiando el correo. Así no existe ninguna contraseña de administrador en GitHub:
--- update public.profiles set role = 'admin' where email = 'tu-correo@ejemplo.com';
+-- Después de crear tu cuenta, convierte el primer usuario en administrador:
+-- update public.profiles set role = 'admin' where username = 'tu_usuario';
