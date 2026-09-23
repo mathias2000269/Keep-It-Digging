@@ -883,6 +883,46 @@ button, input, textarea, select {
   .order-items {
     grid-template-columns:1fr;
   }
+  .toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 999;
+  background: var(--yellow);
+  color: #090909;
+  padding: 16px 20px;
+  border: 1px solid #090909;
+  box-shadow: 8px 8px 0 #090909;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.toast.is-visible {
+  animation: toast-in-out 3s ease forwards;
+}
+
+@keyframes toast-in-out {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
 }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after {

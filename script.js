@@ -144,3 +144,17 @@ orderForm?.addEventListener('submit', event => {
   }
   updateOrderSummary();
 });
+const toast = document.querySelector('#toast');
+const params = new URLSearchParams(window.location.search);
+
+if (toast && params.get('pedido') === 'ok') {
+  toast.hidden = false;
+  toast.classList.add('is-visible');
+
+  setTimeout(() => {
+    toast.hidden = true;
+    toast.classList.remove('is-visible');
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, 3000);
+}
