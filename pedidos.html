@@ -34,7 +34,7 @@
           <input id="order-summary" type="hidden" name="Pedido">
         </div>
         <label>Nombre completo <input type="text" name="Nombre" autocomplete="name" required placeholder="Tu nombre"></label>
-        <label>Teléfono <input type="tel" name="Telefono" autocomplete="tel" required placeholder="555-0000"></label>
+        <label>Teléfono <input type="tel" name="Telefono" required inputmode="numeric" pattern="[0-9]+" title="Introduce solo números"></label>
         <label>Asunto <input type="text" value="Nuevo Pedido" disabled aria-label="Asunto: Nuevo Pedido"></label>
         <label class="full-width">Notas adicionales <textarea name="Notas" rows="5" placeholder="Lugar de entrega, horario o cualquier detalle importante..."></textarea></label>
         <p class="form-note full-width">Esto es una solicitud: confirmaremos el precio y la disponibilidad contigo antes de cerrar el pedido.</p>
