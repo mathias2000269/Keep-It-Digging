@@ -144,9 +144,3 @@ orderForm?.addEventListener('submit', event => {
   }
   updateOrderSummary();
 });
-const successMessage = document.querySelector('#success-message');
-const params = new URLSearchParams(window.location.search);
-
-if (successMessage && params.get('pedido') === 'ok') {
-  successMessage.hidden = false;
-}

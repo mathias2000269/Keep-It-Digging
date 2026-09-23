@@ -883,15 +883,6 @@ button, input, textarea, select {
   .order-items {
     grid-template-columns:1fr;
   }
-  .success-message {
-  grid-column: 1 / -1;
-  background: var(--yellow);
-  color: #090909;
-  padding: 16px 18px;
-  margin-bottom: 22px;
-  font-weight: 800;
-  border-left: 6px solid #fff;
-}
 }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after {
