@@ -895,6 +895,8 @@ button, input, textarea, select {
   box-shadow: 8px 8px 0 #090909;
   font-weight: 800;
   text-transform: uppercase;
+  text-align: center;
+  background-color: var(--yellow);
   letter-spacing: .04em;
 }
 
