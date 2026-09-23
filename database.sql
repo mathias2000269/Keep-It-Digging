@@ -8,7 +8,7 @@ create schema if not exists private;
 revoke all on schema private from public;
 grant usage on schema private to anon, authenticated;
 
-create type public.user_role as enum ('customer', 'worker', 'admin');
+create type public.user_role as enum ('customer', 'worker', 'boss', 'admin');
 create type public.application_status as enum ('pending', 'approved', 'rejected');
 create type public.order_status as enum ('pending', 'preparing', 'ready', 'completed', 'cancelled');
 create type public.inquiry_status as enum ('new', 'resolved');
@@ -77,6 +77,7 @@ create index profiles_role_idx on public.profiles (role);
 create index orders_user_created_idx on public.orders (user_id, created_at desc);
 create index orders_status_created_idx on public.orders (status, created_at desc);
 create index order_items_order_idx on public.order_items (order_id);
+create index order_items_product_idx on public.order_items (product_id);
 create index applications_status_created_idx on public.job_applications (status, created_at desc);
 create index inquiries_status_created_idx on public.inquiries (status, created_at desc);
 
@@ -113,7 +114,7 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.profiles
-    where id = (select auth.uid()) and role in ('worker', 'admin')
+    where id = (select auth.uid()) and role in ('worker', 'boss', 'admin')
   );
 $$;
 
@@ -126,7 +127,7 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.profiles
-    where id = (select auth.uid()) and role = 'admin'
+    where id = (select auth.uid()) and role in ('boss', 'admin')
   );
 $$;
 
@@ -185,7 +186,8 @@ $$;
 
 create or replace function public.review_application(
   p_application_id uuid,
-  p_decision public.application_status
+  p_decision public.application_status,
+  p_role public.user_role default 'worker'
 )
 returns void
 language plpgsql
@@ -195,6 +197,9 @@ as $$
 declare v_user_id uuid;
 begin
   if not private.is_admin() then raise exception 'Acceso denegado'; end if;
+  if p_decision = 'approved' and p_role not in ('worker', 'boss') then
+    raise exception 'Rol de equipo no válido';
+  end if;
 
   update public.job_applications
   set status = p_decision,
@@ -205,19 +210,19 @@ begin
   if v_user_id is null then raise exception 'Solicitud no encontrada'; end if;
 
   if p_decision = 'approved' then
-    update public.profiles set role = 'worker'
+    update public.profiles set role = p_role
     where id = v_user_id and role = 'customer';
   elsif p_decision = 'rejected' then
     update public.profiles set role = 'customer'
-    where id = v_user_id and role <> 'admin';
+    where id = v_user_id and role not in ('boss', 'admin');
   end if;
 end;
 $$;
 
-revoke all on function public.place_order(text,text,text,jsonb) from public;
+revoke all on function public.place_order(text,text,text,jsonb) from public, anon;
 grant execute on function public.place_order(text,text,text,jsonb) to authenticated;
-revoke all on function public.review_application(uuid,public.application_status) from public;
-grant execute on function public.review_application(uuid,public.application_status) to authenticated;
+revoke all on function public.review_application(uuid,public.application_status,public.user_role) from public, anon;
+grant execute on function public.review_application(uuid,public.application_status,public.user_role) to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.products enable row level security;

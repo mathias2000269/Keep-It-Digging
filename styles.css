@@ -8,11 +8,15 @@
   --paper:#f3f0e8;
   --muted:#a6a6a6;
   --line:rgba(255,255,255,.15);
+  --header-height:104px;
   --display:'Barlow Condensed', Impact, sans-serif;
   --body:'Inter', Arial, sans-serif;
 }
 * {
   box-sizing:border-box;
+}
+[hidden] {
+  display:none!important;
 }
 html {
   scroll-behavior:smooth;
@@ -39,7 +43,8 @@ button, input, textarea, select {
   font:inherit;
 }
 .site-header {
-  min-height:92px;
+  height:var(--header-height);
+  min-height:var(--header-height);
   padding:12px clamp(20px,5vw,78px);
   display:flex;
   align-items:center;
@@ -51,8 +56,8 @@ button, input, textarea, select {
   z-index:20;
 }
 .brand img {
-  width:166px;
-  height:62px;
+  width:180px;
+  height:70px;
   object-fit:contain;
   object-position:left center;
 }
@@ -99,7 +104,7 @@ button, input, textarea, select {
   background:var(--yellow);
 }
 .hero-carousel {
-  height:min(720px,calc(100vh - 92px));
+  height:min(720px,calc(100vh - var(--header-height)));
   min-height:560px;
   position:relative;
   overflow:hidden;
@@ -820,8 +825,12 @@ button, input, textarea, select {
   }
 }
 @media (max-width:620px) {
+  :root {
+    --header-height:84px;
+  }
   .site-header {
-    min-height:78px;
+    height:var(--header-height);
+    min-height:var(--header-height);
   }
   .brand img {
     width:130px;
@@ -883,48 +892,6 @@ button, input, textarea, select {
   .order-items {
     grid-template-columns:1fr;
   }
-  .toast {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 999;
-  background: var(--yellow);
-  color: #090909;
-  padding: 16px 20px;
-  border: 1px solid #090909;
-  box-shadow: 8px 8px 0 #090909;
-  font-weight: 800;
-  text-transform: uppercase;
-  text-align: center;
-  background-color: var(--yellow);
-  letter-spacing: .04em;
-}
-
-.toast.is-visible {
-  animation: toast-in-out 3s ease forwards;
-}
-
-@keyframes toast-in-out {
-  0% {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-
-  12% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  85% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-}
 }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after {
@@ -938,7 +905,8 @@ button, input, textarea, select {
 button { border-radius:0; }
 .main-nav button { font-family:var(--body); }
 .account-button,.cart-button {
-  min-height:43px;
+  height:44px;
+  min-height:44px;
   border:1px solid #3b3b3b;
   background:#111;
   color:#fff;
@@ -946,7 +914,17 @@ button { border-radius:0; }
   font-weight:800;
   padding:10px 14px;
 }
-.account-button { width:44px; color:var(--yellow); font-size:1.2rem; }
+.account-button {
+  width:44px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--yellow);
+  font-size:1.2rem;
+  line-height:1;
+}
+.account-button svg { display:block; }
 .cart-button { margin-left:12px; }
 .cart-count {
   min-width:22px;
@@ -961,7 +939,7 @@ button { border-radius:0; }
 .account-menu {
   position:fixed;
   z-index:80;
-  top:82px;
+  top:var(--header-height);
   right:clamp(20px,5vw,78px);
   width:260px;
   padding:18px;
@@ -1053,11 +1031,19 @@ button { border-radius:0; }
 .cart-customer-fields textarea { grid-column:1/-1; resize:vertical; }
 .checkout-button { width:100%; }
 .empty-cart { margin:45px 0; color:#777; text-align:center; }
-.toast {
+.toast-stack {
   position:fixed;
   z-index:120;
   right:24px;
   bottom:24px;
+  width:min(360px,calc(100vw - 48px));
+  display:flex;
+  flex-direction:column-reverse;
+  gap:12px;
+  pointer-events:none;
+}
+.toast {
+  width:100%;
   max-width:360px;
   padding:16px 20px;
   background:var(--yellow);
@@ -1068,7 +1054,7 @@ button { border-radius:0; }
   text-transform:uppercase;
 }
 .toast.is-error { background:#d94a3d; color:#fff; }
-.account-page,.admin-page { min-height:calc(100vh - 92px); }
+.account-page,.admin-page { min-height:calc(100vh - var(--header-height)); }
 .auth-layout { display:grid; grid-template-columns:.9fr 1.1fr; gap:8vw; align-items:center; }
 .auth-copy h1,.dashboard-heading h1,.empty-state h1 {
   margin:0 0 20px;
@@ -1168,7 +1154,7 @@ button { border-radius:0; }
 
 @media (max-width:900px) {
   .account-button,.cart-button { width:100%; margin:0; }
-  .account-menu { top:76px; right:20px; }
+  .account-menu { right:20px; }
   .auth-layout,.profile-grid { grid-template-columns:1fr; }
   .question-section { grid-template-columns:1fr; }
   .stats-grid { grid-template-columns:1fr 1fr; }

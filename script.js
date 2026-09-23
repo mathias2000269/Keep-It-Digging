@@ -5,7 +5,9 @@ const db = backendReady && window.supabase ? window.supabase.createClient(config
 const money = value => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(value || 0));
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
 const statusNames = { pending:'Pendiente', preparing:'Preparando', ready:'Listo', completed:'Completado', cancelled:'Cancelado' };
-const roleNames = { customer:'Cliente', worker:'Trabajador', admin:'Administrador' };
+const roleNames = { customer:'Cliente', worker:'Trabajador', boss:'Jefe', admin:'Administrador' };
+const staffRoles = ['worker', 'boss', 'admin'];
+const managementRoles = ['boss', 'admin'];
 const hiddenLoginEmail = username => `${normalizeUsername(username)}@users.keepitdigging.invalid`;
 function normalizeUsername(value) {
   return String(value || '')
@@ -37,12 +39,22 @@ let inquiries = [];
 let activeInquiryFilter = 'all';
 
 function toast(message, error = false) {
-  document.querySelector('.toast')?.remove();
+  let stack = document.querySelector('.toast-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.className = 'toast-stack';
+    stack.setAttribute('aria-live', 'polite');
+    stack.setAttribute('aria-atomic', 'false');
+    document.body.append(stack);
+  }
   const element = document.createElement('div');
   element.className = `toast${error ? ' is-error' : ''}`;
   element.textContent = message;
-  document.body.append(element);
-  setTimeout(() => element.remove(), 3200);
+  stack.append(element);
+  setTimeout(() => {
+    element.remove();
+    if (!stack.children.length) stack.remove();
+  }, 3200);
 }
 
 function initNavigation() {
@@ -95,8 +107,10 @@ async function loadSession() {
 }
 
 function updateRoleUI() {
-  const staff = ['worker', 'admin'].includes(currentProfile?.role);
-  document.querySelectorAll('.staff-link').forEach(link => link.hidden = !staff);
+  const staff = staffRoles.includes(currentProfile?.role);
+  const management = managementRoles.includes(currentProfile?.role);
+  document.querySelectorAll('.orders-link').forEach(link => link.hidden = !staff);
+  document.querySelectorAll('.employees-link').forEach(link => link.hidden = !management);
 }
 
 function showAccountMenu(event) {
@@ -105,10 +119,10 @@ function showAccountMenu(event) {
   const menu = document.createElement('div');
   menu.className = 'account-menu';
   if (currentSession && currentProfile) {
-    menu.innerHTML = `<strong>${escapeHTML(currentProfile.full_name || 'Mi cuenta')}</strong><small>@${escapeHTML(currentProfile.username)}</small><a href="cuenta.html">Mi perfil y pedidos</a>${['worker','admin'].includes(currentProfile.role) ? '<a href="panel.html">Panel interno</a>' : ''}<button type="button" data-signout>Cerrar sesión</button>`;
+    menu.innerHTML = `<strong>${escapeHTML(currentProfile.full_name || 'Mi cuenta')}</strong><small>@${escapeHTML(currentProfile.username)}</small><a href="cuenta.html">Mi perfil y pedidos</a>${staffRoles.includes(currentProfile.role) ? '<a href="panel.html?section=orders">Gestionar pedidos</a>' : ''}${managementRoles.includes(currentProfile.role) ? '<a href="panel.html?section=employees">Gestionar empleados</a>' : ''}<button type="button" data-signout>Cerrar sesión</button>`;
     menu.querySelector('[data-signout]').addEventListener('click', async () => { await db.auth.signOut(); location.href = 'index.html'; });
   } else {
-    menu.innerHTML = `<strong>Zona de usuario</strong><small>${backendReady ? 'Accede para realizar pedidos' : 'Falta conectar Supabase'}</small><a href="cuenta.html">Iniciar sesión</a><a href="cuenta.html?registro=1">Crear cuenta</a>`;
+    menu.innerHTML = '<strong>Zona de usuario</strong><small>Accede para realizar pedidos</small><a href="cuenta.html">Iniciar sesión</a><a href="cuenta.html?registro=1">Crear cuenta</a>';
   }
   document.body.append(menu);
   setTimeout(() => document.addEventListener('click', () => menu.remove(), { once:true }), 0);
@@ -135,7 +149,6 @@ async function initCatalog() {
     const product = products.find(item => String(item.id) === button.dataset.addProduct);
     addToCart(product);
   });
-  createCartDrawer();
 }
 
 function saveCart() {
@@ -148,7 +161,7 @@ function addToCart(product) {
   const existing = cart.find(item => String(item.id) === String(product.id));
   if (existing) existing.quantity += 1;
   else cart.push({ id:product.id, name:product.name, price:Number(product.price), quantity:1 });
-  saveCart(); openCart(); toast(`${product.name} añadido al carrito.`);
+  saveCart(); toast(`${product.name} añadido al carrito.`);
 }
 
 function createCartDrawer() {
@@ -210,7 +223,7 @@ function changeCartFromInput(event) {
 
 async function checkout() {
   if (!cart.length) return toast('Añade algún producto antes de comprar.', true);
-  if (!db) return toast('Primero conecta el proyecto con Supabase.', true);
+  if (!db) return toast('No se pudo completar el pedido en este momento.', true);
   if (!currentSession) { localStorage.setItem('kid-return', 'productos.html?carrito=1'); location.href = 'cuenta.html'; return; }
   const customerName = document.querySelector('#checkout-name').value.trim();
   const phone = document.querySelector('#checkout-phone').value.trim();
@@ -248,10 +261,11 @@ function initAuthTabs() {
 async function initAccountPage() {
   if (!document.querySelector('.account-page')) return;
   initAuthTabs();
-  if (!db) { document.querySelector('#auth-message').textContent = 'Antes debes configurar Supabase en config.js.'; return; }
   if (currentSession) return showProfile();
   document.querySelector('#login-form').addEventListener('submit', async event => {
-    event.preventDefault(); const form = new FormData(event.currentTarget);
+    event.preventDefault();
+    if (!db) return setAuthMessage('El acceso no está disponible en este momento.');
+    const form = new FormData(event.currentTarget);
     const username = normalizeUsername(form.get('username'));
     const { error } = await db.auth.signInWithPassword({ email:hiddenLoginEmail(username), password:form.get('password') });
     if (error) return setAuthMessage('Usuario o contraseña incorrectos.');
@@ -259,7 +273,9 @@ async function initAccountPage() {
     location.href = destination || 'cuenta.html';
   });
   document.querySelector('#register-form').addEventListener('submit', async event => {
-    event.preventDefault(); const form = new FormData(event.currentTarget);
+    event.preventDefault();
+    if (!db) return setAuthMessage('El registro no está disponible en este momento.');
+    const form = new FormData(event.currentTarget);
     const fullName = form.get('full_name').trim();
     const username = normalizeUsername(form.get('username') || fullName);
     const phone = form.get('phone').trim();
@@ -308,16 +324,19 @@ async function initPanel() {
   if (!document.querySelector('.admin-page')) return;
   const denied = document.querySelector('#access-denied');
   const dashboard = document.querySelector('#staff-dashboard');
-  if (!db || !currentSession || !['worker','admin'].includes(currentProfile?.role)) { denied.hidden = false; return; }
+  if (!db || !currentSession || !staffRoles.includes(currentProfile?.role)) { denied.hidden = false; return; }
   dashboard.hidden = false;
   document.querySelector('#staff-identity').textContent = `${currentProfile.full_name} · ${roleNames[currentProfile.role]}`;
   document.querySelector('#panel-logout').addEventListener('click', async () => { await db.auth.signOut(); location.href = 'index.html'; });
-  const isAdmin = currentProfile.role === 'admin';
-  document.querySelector('#admin-stats').hidden = !isAdmin;
-  document.querySelectorAll('.admin-only').forEach(element => element.hidden = !isAdmin);
+  const isManagement = managementRoles.includes(currentProfile.role);
+  document.querySelector('#admin-stats').hidden = !isManagement;
+  document.querySelectorAll('.management-only').forEach(element => element.hidden = !isManagement);
   initPanelTabs(); initOrderFilters(); initMessageTabs(); initInquiryFilters();
   await loadStaffOrders();
-  if (isAdmin) { await loadApplications(); await loadInquiries(); await loadAdminProducts(); await loadWorkers(); }
+  if (isManagement) { await loadApplications(); await loadInquiries(); await loadAdminProducts(); await loadWorkers(); }
+  const requestedSection = new URLSearchParams(location.search).get('section');
+  const initialPanel = requestedSection === 'employees' && isManagement ? 'workers' : 'orders';
+  document.querySelector(`.panel-tab[data-panel="${initialPanel}"]`)?.click();
 }
 
 function initPanelTabs() {
@@ -389,7 +408,7 @@ function renderMaterialsNeeded() {
 }
 
 function renderStats() {
-  if (currentProfile?.role !== 'admin') return;
+  if (!managementRoles.includes(currentProfile?.role)) return;
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const income = staffOrders.filter(order => order.status === 'completed' && new Date(order.created_at).getTime() >= weekAgo).reduce((sum, order) => sum + Number(order.total), 0);
   document.querySelector('#weekly-income').textContent = money(income);
@@ -402,7 +421,7 @@ async function loadApplications() {
   document.querySelector('#pending-applications').textContent = data.filter(item => item.status === 'pending').length;
   document.querySelector('#application-tab-count').textContent = data.filter(item => item.status === 'pending').length;
   const target = document.querySelector('#applications-list');
-  target.innerHTML = data.length ? data.map(item => `<article class="application-card"><div><h3>${escapeHTML(item.applicant_name)}</h3><p>${new Date(item.created_at).toLocaleDateString('es-ES')} · ${item.status}</p><p>${escapeHTML(item.message || 'Sin mensaje')}</p></div><div class="row-actions"><button class="approve" data-review="approved" data-id="${item.id}" type="button">Aceptar</button><button data-review="pending" data-id="${item.id}" type="button">En espera</button><button class="danger" data-review="rejected" data-id="${item.id}" type="button">Rechazar</button></div></article>`).join('') : '<p class="loading-message">No hay solicitudes.</p>';
+  target.innerHTML = data.length ? data.map(item => `<article class="application-card"><div><h3>${escapeHTML(item.applicant_name)}</h3><p>${new Date(item.created_at).toLocaleDateString('es-ES')} · ${item.status}</p><p>${escapeHTML(item.message || 'Sin mensaje')}</p></div><div class="row-actions"><button class="approve" data-review="approved" data-role="worker" data-id="${item.id}" type="button">Aceptar como trabajador</button><button class="approve" data-review="approved" data-role="boss" data-id="${item.id}" type="button">Aceptar como jefe</button><button data-review="pending" data-id="${item.id}" type="button">En espera</button><button class="danger" data-review="rejected" data-id="${item.id}" type="button">Rechazar</button></div></article>`).join('') : '<p class="loading-message">No hay solicitudes.</p>';
   target.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
 }
 
@@ -443,24 +462,32 @@ async function deleteInquiry(event) {
 }
 
 async function reviewApplication(event) {
-  const { error } = await db.rpc('review_application', { p_application_id:event.currentTarget.dataset.id, p_decision:event.currentTarget.dataset.review });
+  const { error } = await db.rpc('review_application', { p_application_id:event.currentTarget.dataset.id, p_decision:event.currentTarget.dataset.review, p_role:event.currentTarget.dataset.role || 'worker' });
   if (error) return toast('No se pudo revisar la solicitud.', true);
   toast('Solicitud actualizada.'); await loadApplications();
 }
 
 async function loadWorkers() {
-  const { data, error } = await db.from('profiles').select('id, full_name, username, created_at').eq('role', 'worker').order('full_name');
+  const { data, error } = await db.from('profiles').select('id, full_name, username, role, created_at').in('role', ['worker', 'boss']).order('full_name');
   if (error) return toast('No se pudo cargar el equipo.', true);
   const target = document.querySelector('#workers-list');
-  target.innerHTML = data.length ? data.map(worker => `<article class="application-card"><div><h3>${escapeHTML(worker.full_name || 'Sin nombre')}</h3><p>@${escapeHTML(worker.username)}</p><p>Trabajador desde ${new Date(worker.created_at).toLocaleDateString('es-ES')}</p></div><div class="row-actions"><button class="danger" type="button" data-remove-worker="${worker.id}">Quitar permisos</button></div></article>`).join('') : '<p class="loading-message">No hay trabajadores activos.</p>';
+  target.innerHTML = data.length ? data.map(worker => `<article class="application-card"><div><h3>${escapeHTML(worker.full_name || 'Sin nombre')}</h3><p>@${escapeHTML(worker.username)}</p><p>${roleNames[worker.role]} · en el equipo desde ${new Date(worker.created_at).toLocaleDateString('es-ES')}</p></div><div class="row-actions">${worker.id === currentSession.user.id ? '<strong>Tu cuenta</strong>' : `<select data-worker-role="${worker.id}" aria-label="Rol de ${escapeHTML(worker.full_name)}"><option value="worker"${worker.role === 'worker' ? ' selected' : ''}>Trabajador</option><option value="boss"${worker.role === 'boss' ? ' selected' : ''}>Jefe</option></select><button class="danger" type="button" data-remove-worker="${worker.id}">Quitar permisos</button>`}</div></article>`).join('') : '<p class="loading-message">No hay trabajadores ni jefes activos.</p>';
+  target.querySelectorAll('[data-worker-role]').forEach(select => select.addEventListener('change', changeWorkerRole));
   target.querySelectorAll('[data-remove-worker]').forEach(button => button.addEventListener('click', removeWorker));
 }
 
 async function removeWorker(event) {
   if (!confirm('¿Quitar a esta persona el acceso de trabajador? Su cuenta seguirá existiendo como cliente.')) return;
-  const { error } = await db.from('profiles').update({ role:'customer' }).eq('id', event.currentTarget.dataset.removeWorker).eq('role', 'worker');
+  const { error } = await db.from('profiles').update({ role:'customer' }).eq('id', event.currentTarget.dataset.removeWorker).in('role', ['worker', 'boss']);
   if (error) return toast('No se pudieron retirar los permisos.', true);
   toast('Permisos de trabajador retirados.');
+  await loadWorkers();
+}
+
+async function changeWorkerRole(event) {
+  const { error } = await db.from('profiles').update({ role:event.currentTarget.value }).eq('id', event.currentTarget.dataset.workerRole).in('role', ['worker', 'boss']);
+  if (error) return toast('No se pudo cambiar el rol.', true);
+  toast(`Rol cambiado a ${roleNames[event.currentTarget.value].toLowerCase()}.`);
   await loadWorkers();
 }
 
@@ -517,7 +544,7 @@ function initInquiryForm() {
       phone:data.get('phone').trim(),
       message:data.get('message').trim(),
     };
-    if (!/^[0-9]{5,15}$/.test(payload.phone)) { messageTarget.textContent = 'El teléfono debe contener solo entre 5 y 15 números.'; return; }
+    if (!/^[0-9]{10}$/.test(payload.phone)) { messageTarget.textContent = 'El teléfono debe contener exactamente 10 números.'; return; }
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true; button.textContent = 'Enviando…'; messageTarget.textContent = '';
     const { error } = await db.from('inquiries').insert(payload);
@@ -535,6 +562,7 @@ function showQueryToast() {
 
 async function start() {
   initNavigation(); initCarousel(); await loadSession();
+  createCartDrawer();
   await initCatalog(); await initAccountPage(); await initPanel(); initInquiryForm();
   showQueryToast();
 }
