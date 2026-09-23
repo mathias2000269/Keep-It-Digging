@@ -15,7 +15,10 @@
   <main>
     <section class="order-layout section-shell">
       <div class="order-copy"><p class="eyebrow">Realizar pedido</p><h1>Del fondo de la tierra a donde tú digas.</h1><p>Indícanos qué necesitas y en qué cantidad. Nuestro equipo se pondrá en contacto contigo para confirmar disponibilidad, precio y entrega.</p><div class="order-points"><p><span>01</span>Envías tu solicitud</p><p><span>02</span>Confirmamos existencias</p><p><span>03</span>Acordamos la entrega</p></div></div>
+      <div id="success-message" class="success-message" hidden>Pedido realizado con éxito. Nos pondremos en contacto contigo pronto.</div>
       <form class="contact-form order-form" action="https://formsubmit.co/mathias2000269@gmail.com" method="POST">
+        <input type="hidden" name="_next" value="https://mathias2000269.github.io/Keep-It-Digging/pedidos.html?pedido=ok">
+        <input type="hidden" name="_captcha" value="false">
         <input type="hidden" name="_subject" value="Nuevo Pedido"><input type="hidden" name="_template" value="table"><input type="hidden" name="_captcha" value="false">
         <div class="order-builder full-width">
           <div class="builder-heading"><p class="builder-step">01 · Añade los materiales</p><p>Puedes añadir tantos productos como necesites y eliminar cualquiera antes de enviar.</p></div>

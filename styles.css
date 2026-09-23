@@ -146,14 +146,14 @@ button, input, textarea, select {
   color:var(--yellow);
   text-transform:uppercase;
   letter-spacing:.17em;
-  font-size:.78rem;
+  font-size:2.0rem;
   font-weight:800;
   margin:0 0 14px;
 }
 .slide-copy h1, .slide-copy h2 {
   font-family:var(--display);
   text-transform:uppercase;
-  font-size:clamp(4.5rem,8vw,8.8rem);
+  font-size:clamp(4rem,7.5vw,8.2rem);
   line-height:.78;
   letter-spacing:-.04em;
   margin:0;
@@ -883,6 +883,15 @@ button, input, textarea, select {
   .order-items {
     grid-template-columns:1fr;
   }
+  .success-message {
+  grid-column: 1 / -1;
+  background: var(--yellow);
+  color: #090909;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  font-weight: 800;
+  border-left: 6px solid #fff;
+}
 }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after {

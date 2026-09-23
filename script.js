@@ -33,7 +33,7 @@ function showSlide(index) {
 function startCarousel() {
   if (slides.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   clearInterval(carouselTimer);
-  carouselTimer = setInterval(() => showSlide((currentSlide + 1) % slides.length), 3000);
+  carouselTimer = setInterval(() => showSlide((currentSlide + 1) % slides.length), 99999000);
 }
 
 dots.forEach((dot, index) => dot.addEventListener('click', () => {
@@ -144,3 +144,9 @@ orderForm?.addEventListener('submit', event => {
   }
   updateOrderSummary();
 });
+const successMessage = document.querySelector('#success-message');
+const params = new URLSearchParams(window.location.search);
+
+if (successMessage && params.get('pedido') === 'ok') {
+  successMessage.hidden = false;
+}
