@@ -21,9 +21,11 @@
     <section class="form-section">
       <div class="form-intro"><div class="section-kicker light"><span></span>Cuéntanos</div><h2>Ninguna duda es demasiado pequeña.</h2><p>Si tienes alguna pregunta, puedes contactar con nosotros mediante este formulario sin ningún reparo, aunque todavía no tengas pensado comprar. Contestamos en cuanto salimos del túnel.</p></div>
       <form class="contact-form" action="https://formsubmit.co/mathias2000269@gmail.com" method="POST">
+        <input type="hidden" name="_next" value="https://mathias2000269.github.io/Keep-It-Digging/contacto.html?duda=ok">
+        <input type="hidden" name="_captcha" value="false">
         <input type="hidden" name="_subject" value="Duda"><input type="hidden" name="_template" value="table"><input type="hidden" name="_captcha" value="false">
         <label>Nombre completo <input type="text" name="Nombre" autocomplete="name" required placeholder="Tu nombre"></label>
-        <label>Teléfono <input type="tel" name="Telefono" autocomplete="tel" required placeholder="555-0000"></label>
+        <label>Teléfono <input type="tel" name="Telefono" required inputmode="numeric" pattern="[0-9]+" title="Introduce solo números"></label>
         <label class="full-width">Asunto <input type="text" value="Duda" disabled aria-label="Asunto: Duda"></label>
         <label class="full-width">Tu duda <textarea name="Mensaje" rows="6" required placeholder="Pregunta lo que necesites..."></textarea></label>
         <p class="form-note full-width">Al enviar, tu nombre y teléfono se incluirán junto al mensaje. La primera entrega puede requerir validar el correo receptor.</p>
@@ -32,5 +34,6 @@
     </section>
   </main>
   <footer class="site-footer"><img src="assets/logo2.png" alt=""><p>Pico y pala desde 1856.</p><small>© 2026 K.I.D. Mining Co. · Los Santos</small></footer>
+  <div id="toast" class="toast" hidden></div>
 </body>
 </html>

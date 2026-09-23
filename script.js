@@ -147,14 +147,27 @@ orderForm?.addEventListener('submit', event => {
 const toast = document.querySelector('#toast');
 const params = new URLSearchParams(window.location.search);
 
-if (toast && params.get('pedido') === 'ok') {
-  toast.hidden = false;
-  toast.classList.add('is-visible');
+if (toast) {
+  let toastText = '';
 
-  setTimeout(() => {
-    toast.hidden = true;
-    toast.classList.remove('is-visible');
+  if (params.get('pedido') === 'ok') {
+    toastText = 'Pedido realizado con éxito.';
+  }
 
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }, 3000);
+  if (params.get('duda') === 'ok') {
+    toastText = 'Duda enviada con éxito.';
+  }
+
+  if (toastText) {
+    toast.textContent = toastText;
+    toast.hidden = false;
+    toast.classList.add('is-visible');
+
+    setTimeout(() => {
+      toast.hidden = true;
+      toast.classList.remove('is-visible');
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }, 3000);
+  }
 }
