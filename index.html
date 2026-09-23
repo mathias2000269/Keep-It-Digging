@@ -7,70 +7,39 @@
   <title>K.I.D. | Empresa minera</title>
   <link rel="icon" href="assets/logo2.png">
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
   <script src="script.js" defer></script>
 </head>
 <body data-page="inicio">
   <header class="site-header">
-    <a class="brand" href="index.html" aria-label="K.I.D., ir al inicio">
-      <img src="assets/logo2.png" alt="Logo de K.I.D. Keep It Digging">
-    </a>
+    <a class="brand" href="index.html" aria-label="K.I.D., ir al inicio"><img src="assets/logo2.png" alt="Logo de K.I.D. Keep It Digging"></a>
     <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Abrir menú"><span></span><span></span><span></span></button>
     <nav id="main-nav" class="main-nav" aria-label="Navegación principal">
-      <a href="index.html">Inicio</a>
-      <a href="productos.html">Productos</a>
-      <a href="contacto.html">Contacto</a>
-      <a class="nav-cta" href="pedidos.html">Realizar pedido</a>
+      <a href="index.html">Inicio</a><a href="productos.html">Productos</a><a href="contacto.html">Contacto</a>
+      <a class="staff-link" href="panel.html" hidden>Panel</a>
+      <button class="account-button" type="button" aria-label="Abrir menú de usuario" aria-expanded="false">♟</button>
     </nav>
   </header>
-
   <main>
     <section class="hero-carousel" aria-label="Presentación de K.I.D.">
       <div class="carousel-track">
-        <article class="carousel-slide is-active">
-          <img src="assets/logo.png" alt="Topo minero de K.I.D. con taladro">
-          <div class="slide-copy"><p class="eyebrow">Empresa minera de Los Santos</p><h1>Keep it digging.</h1><p>Donde otros ven piedra, nosotros vemos negocio.</p></div>
-        </article>
-        <article class="carousel-slide">
-          <img src="assets/logo.png" alt="Emblema minero de K.I.D.">
-          <div class="slide-copy"><p class="eyebrow">Trabajo duro. Pico afilado.</p><h2>Más profundo.<br>Más brillante.</h2><p>Materiales seleccionados por mineros que sí bajan a la mina.</p></div>
-        </article>
-        <article class="carousel-slide">
-          <img src="assets/logo.png" alt="Mascota minera de K.I.D.">
-          <div class="slide-copy"><p class="eyebrow">K.I.D. Mining Co.</p><h2>La veta buena<br>no espera.</h2><p>Extracción, clasificación y entrega con carácter.</p></div>
-        </article>
+        <article class="carousel-slide is-active"><img src="assets/logo.png" alt="Topo minero de K.I.D. con taladro"><div class="slide-copy"><p class="eyebrow">Empresa minera de Los Santos</p><h1>Keep it digging.</h1><p>Donde otros ven piedra, nosotros vemos negocio.</p></div></article>
+        <article class="carousel-slide"><img src="assets/logo.png" alt="Emblema minero de K.I.D."><div class="slide-copy"><p class="eyebrow">Trabajo duro. Pico afilado.</p><h2>Más profundo.<br>Más brillante.</h2><p>Materiales seleccionados por mineros que sí bajan a la mina.</p></div></article>
+        <article class="carousel-slide"><img src="assets/logo.png" alt="Mascota minera de K.I.D."><div class="slide-copy"><p class="eyebrow">K.I.D. Mining Co.</p><h2>La veta buena<br>no espera.</h2><p>Extracción, clasificación y entrega con carácter.</p></div></article>
       </div>
-      <div class="carousel-dots" aria-label="Controles del carrusel">
-        <button class="is-active" type="button" aria-label="Ver diapositiva 1"></button>
-        <button type="button" aria-label="Ver diapositiva 2"></button>
-        <button type="button" aria-label="Ver diapositiva 3"></button>
-      </div>
+      <div class="carousel-dots" aria-label="Controles del carrusel"><button class="is-active" type="button" aria-label="Ver diapositiva 1"></button><button type="button" aria-label="Ver diapositiva 2"></button><button type="button" aria-label="Ver diapositiva 3"></button></div>
     </section>
-
     <section class="story section-shell">
       <div class="section-kicker"><span></span>Nuestra historia</div>
-      <div class="story-grid">
-        <h2>Empezamos con un pico prestado y una deuda que preferimos no recordar.</h2>
-        <div class="story-copy">
-          <p>K.I.D. nació cuando tres valientes confundieron una vieja cantera con un atajo hacia Paleto Bay. Ya que estaban allí abajo, decidieron ponerse a trabajar. El primer día sacaron dos piedras, una rueda de tractor y un optimismo sospechosamente resistente.</p>
-          <p>Desde entonces hemos perfeccionado el noble arte de encontrar valor donde todos los demás solo ven polvo. Nos tomamos el trabajo en serio, aunque nos encanta darte con nuestro pico en el hoyo —siempre hablando de minería, por supuesto— y celebramos cada veta como si fuera la primera.</p>
-          <p class="story-signoff">Minando diamantes desde Minecraft 1.2.</p>
-        </div>
-      </div>
+      <div class="story-grid"><h2>Empezamos con un pico prestado y una deuda que preferimos no recordar.</h2><div class="story-copy"><p>K.I.D. nació cuando tres valientes confundieron una vieja cantera con un atajo hacia Paleto Bay. Ya que estaban allí abajo, decidieron ponerse a trabajar.</p><p>Desde entonces hemos perfeccionado el noble arte de encontrar valor donde todos los demás solo ven polvo.</p><p class="story-signoff">Minando diamantes desde Minecraft 1.2.</p></div></div>
     </section>
-
-    <section class="reviews">
-      <div class="section-shell">
-        <div class="section-kicker light"><span></span>Hablan de nosotros</div>
-        <div class="reviews-heading"><h2>Cinco estrellas.<br>Cero derrumbes reseñables.</h2><p>Opiniones de clientes satisfechos, sorprendidos y completamente inventados.</p></div>
-        <div class="review-grid">
-          <article class="review-card"><div class="stars" aria-label="5 de 5 estrellas">★★★★★</div><blockquote>“Pedí hierro y llegó tan puntual que todavía no había terminado de inventarme dónde guardarlo.”</blockquote><p><strong>Manolo “El Tuerca”</strong><span>Mecánico, La Mesa</span></p></article>
-          <article class="review-card featured"><div class="stars" aria-label="5 de 5 estrellas">★★★★★</div><blockquote>“El oro brillaba tanto que tuve que bajar los gráficos. Servicio impecable y topo muy educado.”</blockquote><p><strong>Lucía Barrena</strong><span>Joyera, Rockford Hills</span></p></article>
-          <article class="review-card"><div class="stars" aria-label="5 de 5 estrellas">★★★★★</div><blockquote>“Les pedí carbón. Me trajeron carbón. Parece sencillo, pero en Los Santos eso ya es excelencia.”</blockquote><p><strong>Kevin McPiedra</strong><span>Empresario independiente</span></p></article>
-        </div>
-      </div>
-    </section>
+    <section class="reviews"><div class="section-shell"><div class="section-kicker light"><span></span>Hablan de nosotros</div><div class="reviews-heading"><h2>Cinco estrellas.<br>Cero derrumbes reseñables.</h2><p>Opiniones de clientes satisfechos, sorprendidos y completamente inventados.</p></div><div class="review-grid">
+      <article class="review-card"><div class="stars">★★★★★</div><blockquote>“Pedí hierro y llegó tan puntual que todavía no había terminado de inventarme dónde guardarlo.”</blockquote><p><strong>Manolo “El Tuerca”</strong><span>Mecánico, La Mesa</span></p></article>
+      <article class="review-card featured"><div class="stars">★★★★★</div><blockquote>“El oro brillaba tanto que tuve que bajar los gráficos. Servicio impecable.”</blockquote><p><strong>Lucía Barrena</strong><span>Joyera, Rockford Hills</span></p></article>
+      <article class="review-card"><div class="stars">★★★★★</div><blockquote>“Les pedí carbón. Me trajeron carbón. En Los Santos eso ya es excelencia.”</blockquote><p><strong>Kevin McPiedra</strong><span>Empresario independiente</span></p></article>
+    </div></div></section>
   </main>
-
   <footer class="site-footer"><img src="assets/logo2.png" alt=""><p>Pico y pala desde 1856.</p><small>© 2026 K.I.D. Mining Co. · Los Santos</small></footer>
 </body>
 </html>
