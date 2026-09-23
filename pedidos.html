@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Realiza un pedido a K.I.D. Mining Co.">
+  <title>Realizar pedido | K.I.D.</title>
+  <link rel="icon" href="assets/logo2.png"><link rel="stylesheet" href="styles.css"><script src="script.js" defer></script>
+</head>
+<body data-page="pedidos">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="K.I.D., ir al inicio"><img src="assets/logo2.png" alt="Logo de K.I.D. Keep It Digging"></a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Abrir menú"><span></span><span></span><span></span></button>
+    <nav id="main-nav" class="main-nav" aria-label="Navegación principal"><a href="index.html">Inicio</a><a href="productos.html">Productos</a><a href="contacto.html">Contacto</a><a class="nav-cta" href="pedidos.html">Realizar pedido</a></nav>
+  </header>
+  <main>
+    <section class="order-layout section-shell">
+      <div class="order-copy"><p class="eyebrow">Realizar pedido</p><h1>Del fondo de la tierra a donde tú digas.</h1><p>Indícanos qué necesitas y en qué cantidad. Nuestro equipo se pondrá en contacto contigo para confirmar disponibilidad, precio y entrega.</p><div class="order-points"><p><span>01</span>Envías tu solicitud</p><p><span>02</span>Confirmamos existencias</p><p><span>03</span>Acordamos la entrega</p></div></div>
+      <form class="contact-form order-form" action="https://formsubmit.co/mathias2000269@gmail.com" method="POST">
+        <input type="hidden" name="_subject" value="Nuevo Pedido"><input type="hidden" name="_template" value="table"><input type="hidden" name="_captcha" value="false">
+        <div class="order-builder full-width">
+          <div class="builder-heading"><p class="builder-step">01 · Añade los materiales</p><p>Puedes añadir tantos productos como necesites y eliminar cualquiera antes de enviar.</p></div>
+          <div class="builder-controls">
+            <label>Material <select id="order-material"><option value="" selected disabled>Selecciona uno</option><option>Hierro</option><option>Cobre</option><option>Carbón</option><option>Oro</option><option>Plata</option><option>Diamante</option></select></label>
+            <label>Cantidad <input id="order-quantity" type="number" min="1" step="1" inputmode="numeric" placeholder="Ej. 200"></label>
+            <button id="add-order-item" class="add-order-button" type="button">Añadir al pedido <span>＋</span></button>
+          </div>
+          <div class="order-details" aria-labelledby="order-details-title">
+            <div class="order-details-heading"><span id="order-details-title">Detalles del pedido</span><span id="order-count">0 productos</span></div>
+            <div id="order-items" class="order-items" role="list"><p class="empty-order">Todavía no has añadido ningún material.</p></div>
+          </div>
+          <p id="order-error" class="order-error" role="alert" aria-live="polite"></p>
+          <input id="order-summary" type="hidden" name="Pedido">
+        </div>
+        <label>Nombre completo <input type="text" name="Nombre" autocomplete="name" required placeholder="Tu nombre"></label>
+        <label>Teléfono <input type="tel" name="Telefono" autocomplete="tel" required placeholder="555-0000"></label>
+        <label>Asunto <input type="text" value="Nuevo Pedido" disabled aria-label="Asunto: Nuevo Pedido"></label>
+        <label class="full-width">Notas adicionales <textarea name="Notas" rows="5" placeholder="Lugar de entrega, horario o cualquier detalle importante..."></textarea></label>
+        <p class="form-note full-width">Esto es una solicitud: confirmaremos el precio y la disponibilidad contigo antes de cerrar el pedido.</p>
+        <button class="submit-button full-width" type="submit">Enviar pedido <span>↗</span></button>
+      </form>
+    </section>
+  </main>
+  <footer class="site-footer"><img src="assets/logo2.png" alt=""><p>Pico y pala desde 1856.</p><small>© 2026 K.I.D. Mining Co. · Los Santos</small></footer>
+</body>
+</html>

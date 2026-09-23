@@ -1,64 +1,76 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Blackbird Tuning Shop</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" type="image/png" href="src/logo2.png">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="K.I.D. — Empresa minera de Los Santos. Keep it digging.">
+  <title>K.I.D. | Empresa minera</title>
+  <link rel="icon" href="assets/logo2.png">
   <link rel="stylesheet" href="styles.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Bebas+Neue&family=Orbitron:wght@400..900&display=swap" rel="stylesheet">
-
+  <script src="script.js" defer></script>
 </head>
-<body>
-  <!-- Hero con video de fondo -->
-  <section class="hero">
-    <video autoplay muted loop playsinline>
-      <source src="src/12.mp4" type="video/mp4">
-      Tu navegador no soporta vídeo HTML5.
-    </video>  
-    <header>
-    <div class="logo"><img src="src/logo2.png" alt="Logo"></div>
-    <nav>
-      <ul>
-        <li><a href="#">Cosméticos</a></li>
-        <li><a href="#">Tuning Packs</a></li>
-        <li><a href="#">Noticias</a></li>
-        <li><a href="#">Personal</a></li>
-        <li><a href="#">Contacto</a></li>
-      </ul>
+<body data-page="inicio">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="K.I.D., ir al inicio">
+      <img src="assets/logo2.png" alt="Logo de K.I.D. Keep It Digging">
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Abrir menú"><span></span><span></span><span></span></button>
+    <nav id="main-nav" class="main-nav" aria-label="Navegación principal">
+      <a href="index.html">Inicio</a>
+      <a href="productos.html">Productos</a>
+      <a href="contacto.html">Contacto</a>
+      <a class="nav-cta" href="pedidos.html">Realizar pedido</a>
     </nav>
   </header>
-    <div class="overlay"></div>
-    <div class="hero-text">
-      <h1>Ain't Touched, <br>Homie.</h1>
-    </div>
-  </section>
 
-  <!-- Modelos destacados -->
-  <section class="models">
-  <div class="model">
-    <img src="src/3.png" alt="Modelo 1">
-    <div class="model-info">
-      <h2>Modelo 1</h2>
-      <p>Motor V8, 1000 HP, 0-100 en 2.5s</p>
-    </div>
-  </div>
+  <main>
+    <section class="hero-carousel" aria-label="Presentación de K.I.D.">
+      <div class="carousel-track">
+        <article class="carousel-slide is-active">
+          <img src="assets/logo.png" alt="Topo minero de K.I.D. con taladro">
+          <div class="slide-copy"><p class="eyebrow">Empresa minera de Los Santos</p><h1>Keep it digging.</h1><p>Donde otros ven piedra, nosotros vemos negocio.</p></div>
+        </article>
+        <article class="carousel-slide">
+          <img src="assets/logo.png" alt="Emblema minero de K.I.D.">
+          <div class="slide-copy"><p class="eyebrow">Trabajo duro. Pico afilado.</p><h2>Más profundo.<br>Más brillante.</h2><p>Materiales seleccionados por mineros que sí bajan a la mina.</p></div>
+        </article>
+        <article class="carousel-slide">
+          <img src="assets/logo.png" alt="Mascota minera de K.I.D.">
+          <div class="slide-copy"><p class="eyebrow">K.I.D. Mining Co.</p><h2>La veta buena<br>no espera.</h2><p>Extracción, clasificación y entrega con carácter.</p></div>
+        </article>
+      </div>
+      <div class="carousel-dots" aria-label="Controles del carrusel">
+        <button class="is-active" type="button" aria-label="Ver diapositiva 1"></button>
+        <button type="button" aria-label="Ver diapositiva 2"></button>
+        <button type="button" aria-label="Ver diapositiva 3"></button>
+      </div>
+    </section>
 
-  <div class="model">
-    <img src="src/4.png" alt="Modelo 2">
-    <div class="model-info">
-      <h2>Modelo 2</h2>
-      <p>Motor V6, 750 HP, 0-100 en 3.1s</p>
-    </div>
-  </div>
-</section>
+    <section class="story section-shell">
+      <div class="section-kicker"><span></span>Nuestra historia</div>
+      <div class="story-grid">
+        <h2>Empezamos con un pico prestado y una deuda que preferimos no recordar.</h2>
+        <div class="story-copy">
+          <p>K.I.D. nació cuando tres valientes confundieron una vieja cantera con un atajo hacia Paleto Bay. Ya que estaban allí abajo, decidieron ponerse a trabajar. El primer día sacaron dos piedras, una rueda de tractor y un optimismo sospechosamente resistente.</p>
+          <p>Desde entonces hemos perfeccionado el noble arte de encontrar valor donde todos los demás solo ven polvo. Nos tomamos el trabajo en serio, aunque nos encanta darte con nuestro pico en el hoyo —siempre hablando de minería, por supuesto— y celebramos cada veta como si fuera la primera.</p>
+          <p class="story-signoff">Minando diamantes desde Minecraft 1.2.</p>
+        </div>
+      </div>
+    </section>
 
-  <!-- Footer -->
-  <footer>
-    <p>Tallereando desde 1927</p>
-  </footer>
+    <section class="reviews">
+      <div class="section-shell">
+        <div class="section-kicker light"><span></span>Hablan de nosotros</div>
+        <div class="reviews-heading"><h2>Cinco estrellas.<br>Cero derrumbes reseñables.</h2><p>Opiniones de clientes satisfechos, sorprendidos y completamente inventados.</p></div>
+        <div class="review-grid">
+          <article class="review-card"><div class="stars" aria-label="5 de 5 estrellas">★★★★★</div><blockquote>“Pedí hierro y llegó tan puntual que todavía no había terminado de inventarme dónde guardarlo.”</blockquote><p><strong>Manolo “El Tuerca”</strong><span>Mecánico, La Mesa</span></p></article>
+          <article class="review-card featured"><div class="stars" aria-label="5 de 5 estrellas">★★★★★</div><blockquote>“El oro brillaba tanto que tuve que bajar los gráficos. Servicio impecable y topo muy educado.”</blockquote><p><strong>Lucía Barrena</strong><span>Joyera, Rockford Hills</span></p></article>
+          <article class="review-card"><div class="stars" aria-label="5 de 5 estrellas">★★★★★</div><blockquote>“Les pedí carbón. Me trajeron carbón. Parece sencillo, pero en Los Santos eso ya es excelencia.”</blockquote><p><strong>Kevin McPiedra</strong><span>Empresario independiente</span></p></article>
+        </div>
+      </div>
+    </section>
+  </main>
 
+  <footer class="site-footer"><img src="assets/logo2.png" alt=""><p>Pico y pala desde 1856.</p><small>© 2026 K.I.D. Mining Co. · Los Santos</small></footer>
 </body>
 </html>
