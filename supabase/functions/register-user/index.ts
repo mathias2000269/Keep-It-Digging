@@ -40,7 +40,7 @@ Deno.serve(async (request) => {
 
     if (fullName.length < 2 || fullName.length > 80) return json({ error: "Escribe un nombre válido." }, 400);
     if (!/^[a-z0-9._-]{3,24}$/.test(username)) return json({ error: "El usuario debe tener entre 3 y 24 caracteres." }, 400);
-    if (!/^[0-9]{5,15}$/.test(phone)) return json({ error: "El teléfono solo puede contener entre 5 y 15 números." }, 400);
+    if (!/^[0-9]{10}$/.test(phone)) return json({ error: "El teléfono debe contener exactamente 10 números." }, 400);
     if (password.length < 6 || password.length > 72) return json({ error: "La contraseña debe tener entre 6 y 72 caracteres." }, 400);
 
     const url = Deno.env.get("SUPABASE_URL");

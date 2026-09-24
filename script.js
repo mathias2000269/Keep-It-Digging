@@ -241,7 +241,7 @@ async function checkout() {
   const phone = document.querySelector('#checkout-phone').value.trim();
   const notes = document.querySelector('#checkout-notes').value.trim();
   if (!customerName) return toast('Escribe tu nombre.', true);
-  if (!/^[0-9]{5,15}$/.test(phone)) return toast('El teléfono debe contener solo entre 5 y 15 números.', true);
+  if (!/^[0-9]{10}$/.test(phone)) return toast('El teléfono debe contener exactamente 10 números.', true);
   const button = document.querySelector('.checkout-button'); button.disabled = true; button.textContent = 'Enviando…';
   const items = cart.map(item => ({ product_id:Number(item.id), quantity:item.quantity }));
   const { error } = await db.rpc('place_order', { p_customer_name:customerName, p_phone:phone, p_notes:notes, p_items:items });

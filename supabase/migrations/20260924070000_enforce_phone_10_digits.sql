@@ -1,5 +1,36 @@
+do $$
+begin
+  if exists (select 1 from public.profiles where phone !~ '^[0-9]{10}$') then
+    raise exception 'Hay teléfonos inválidos en public.profiles. Deben ser exactamente 10 números.';
+  end if;
+
+  if exists (select 1 from public.orders where phone !~ '^[0-9]{10}$') then
+    raise exception 'Hay teléfonos inválidos en public.orders. Deben ser exactamente 10 números.';
+  end if;
+
+  if exists (select 1 from public.inquiries where phone !~ '^[0-9]{10}$') then
+    raise exception 'Hay teléfonos inválidos en public.inquiries. Deben ser exactamente 10 números.';
+  end if;
+end $$;
+
+alter table public.profiles drop constraint if exists profiles_phone_check;
+alter table public.orders drop constraint if exists orders_phone_check;
+alter table public.inquiries drop constraint if exists inquiries_phone_check;
+
+drop policy if exists "inquiries_public_insert" on public.inquiries;
+
+alter table public.profiles alter column phone type varchar(10);
+alter table public.orders alter column phone type varchar(10);
+alter table public.inquiries alter column phone type varchar(10);
+
+alter table public.profiles
+add constraint profiles_phone_check check (phone ~ '^[0-9]{10}$');
+
 alter table public.orders
-alter column user_id drop not null;
+add constraint orders_phone_check check (phone ~ '^[0-9]{10}$');
+
+alter table public.inquiries
+add constraint inquiries_phone_check check (phone ~ '^[0-9]{10}$');
 
 create or replace function public.place_order(
   p_customer_name text,
@@ -47,6 +78,15 @@ begin
   return v_order_id;
 end;
 $$;
+
+create policy "inquiries_public_insert" on public.inquiries
+for insert to anon, authenticated
+with check (
+  status = 'new'
+  and phone ~ '^[0-9]{10}$'
+  and char_length(trim(name)) between 2 and 80
+  and char_length(trim(message)) between 5 and 2000
+);
 
 revoke all on function public.place_order(text,text,text,jsonb) from public;
 grant execute on function public.place_order(text,text,text,jsonb) to anon, authenticated;
