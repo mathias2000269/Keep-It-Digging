@@ -747,7 +747,8 @@ async function updateClaimStatus(event) {
 
 // 31. Gastos e ingresos históricos
 // Solo boss y admin cargan esta información. Los tickets cancelados se
-// conservan para dejar constancia, pero dejan de restarse de los ingresos.
+// conservan pero dejan de restarse. El botón eliminar borra el ticket de la
+// base de datos, así que si era un gasto activo también deja de descontarse.
 function initExpenseForm() {
   const form = document.querySelector('#expense-form');
   form?.addEventListener('submit', createExpense);
@@ -774,10 +775,10 @@ function renderExpenses() {
   document.querySelector('#gross-income').textContent = money(grossIncome);
   document.querySelector('#total-expenses').textContent = money(totalExpenses);
   document.querySelector('#net-income').textContent = money(grossIncome - totalExpenses);
-  document.querySelector('#expense-tab-count').textContent = activeExpenses.length;
 
-  target.innerHTML = expenses.length ? expenses.map(expense => `<article class="application-card expense-ticket${expense.cancelled_at ? ' is-cancelled' : ''}"><div><h3>${escapeHTML(expense.concept)}</h3><p>${new Date(expense.created_at).toLocaleString('es-ES')} · ${escapeHTML(expense.created_by_name)}</p>${expense.cancelled_at ? `<span class="expense-cancelled-label">Cancelado el ${new Date(expense.cancelled_at).toLocaleString('es-ES')}</span>` : ''}</div><strong class="expense-amount">−${money(expense.amount)}</strong>${expense.cancelled_at ? '' : `<div class="row-actions"><button class="danger" type="button" data-cancel-expense="${expense.id}">Cancelar ticket</button></div>`}</article>`).join('') : '<p class="loading-message">Todavía no hay tickets de gastos.</p>';
+  target.innerHTML = expenses.length ? expenses.map(expense => `<article class="application-card expense-ticket${expense.cancelled_at ? ' is-cancelled' : ''}"><div><h3>${escapeHTML(expense.concept)}</h3><p>${new Date(expense.created_at).toLocaleString('es-ES')} · ${escapeHTML(expense.created_by_name)}</p>${expense.cancelled_at ? `<span class="expense-cancelled-label">Cancelado el ${new Date(expense.cancelled_at).toLocaleString('es-ES')}</span>` : ''}</div><strong class="expense-amount">−${money(expense.amount)}</strong><div class="row-actions">${expense.cancelled_at ? '' : `<button type="button" data-cancel-expense="${expense.id}">Cancelar ticket</button>`}<button class="danger" type="button" data-delete-expense="${expense.id}">Eliminar</button></div></article>`).join('') : '<p class="loading-message">Todavía no hay tickets de gastos.</p>';
   target.querySelectorAll('[data-cancel-expense]').forEach(button => button.addEventListener('click', cancelExpense));
+  target.querySelectorAll('[data-delete-expense]').forEach(button => button.addEventListener('click', deleteExpense));
 }
 
 async function createExpense(event) {
@@ -800,6 +801,17 @@ async function cancelExpense(event) {
   const { error } = await db.rpc('cancel_expense', { p_expense_id:event.currentTarget.dataset.cancelExpense });
   if (error) return toast('No se pudo cancelar el ticket.', true);
   toast('Ticket cancelado.'); await loadFinancialData();
+}
+
+async function deleteExpense(event) {
+  const id = event.currentTarget.dataset.deleteExpense;
+  const expense = expenses.find(item => item.id === id);
+  if (!expense) return;
+  if (!expense.cancelled_at && !confirm('¿Seguro que quieres eliminar este gasto? Se borrará de la base de datos y dejará de restarse de los ingresos.')) return;
+  const { error } = await db.rpc('delete_expense', { p_expense_id:id });
+  if (error) return toast('No se pudo eliminar el gasto.', true);
+  toast('Ticket eliminado.');
+  await loadFinancialData();
 }
 
 // 32. Trabajadores y jefes
