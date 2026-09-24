@@ -620,7 +620,8 @@ async function updateOrderStatus(event) {
   const { error } = await db.from('orders').update({ status:event.target.value }).eq('id', event.target.dataset.orderStatus);
   if (error) return toast('No se pudo cambiar el estado.', true);
   const order = staffOrders.find(item => item.id === event.target.dataset.orderStatus); if (order) order.status = event.target.value;
-  toast('Estado actualizado.'); renderStaffOrders(); renderMaterialsNeeded(); renderStats();
+  toast('Estado actualizado.'); renderStaffOrders(); renderMaterialsNeeded();
+  if (managementRoles.includes(currentProfile?.role)) await loadFinancialData();
 }
 
 async function deleteOrder(event) {
