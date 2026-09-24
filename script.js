@@ -65,6 +65,7 @@ let claims = [];
 let activeClaimFilter = 'all';
 let revenueEntries = [];
 let expenses = [];
+let expenseLedger = [];
 
 // 6. Avisos flotantes
 // Crea notificaciones apiladas. Por eso si anades varios materiales rapido,
@@ -644,7 +645,7 @@ function renderMaterialsNeeded() {
 function renderStats() {
   if (!managementRoles.includes(currentProfile?.role)) return;
   const grossIncome = revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const totalExpenses = expenses.filter(expense => !expense.cancelled_at).reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const totalExpenses = expenseLedger.filter(expense => !expense.cancelled_at).reduce((sum, expense) => sum + Number(expense.amount), 0);
   document.querySelector('#total-income').textContent = money(grossIncome - totalExpenses);
   document.querySelector('#active-orders').textContent = staffOrders.filter(order => ['pending','preparing','ready'].includes(order.status)).length;
 }
@@ -747,21 +748,23 @@ async function updateClaimStatus(event) {
 
 // 31. Gastos e ingresos históricos
 // Solo boss y admin cargan esta información. Los tickets cancelados se
-// conservan pero dejan de restarse. El botón eliminar borra el ticket de la
-// base de datos, así que si era un gasto activo también deja de descontarse.
+// conservan pero dejan de restarse. El botón eliminar borra la tarjeta visible,
+// pero el gasto activo se queda en expense_ledger para seguir descontando.
 function initExpenseForm() {
   const form = document.querySelector('#expense-form');
   form?.addEventListener('submit', createExpense);
 }
 
 async function loadFinancialData() {
-  const [revenueResult, expenseResult] = await Promise.all([
+  const [revenueResult, expenseResult, expenseLedgerResult] = await Promise.all([
     db.from('revenue_ledger').select('*').order('completed_at', { ascending:false }),
     db.from('expenses').select('*').order('created_at', { ascending:false }),
+    db.from('expense_ledger').select('amount,cancelled_at'),
   ]);
-  if (revenueResult.error || expenseResult.error) return toast('No se pudieron cargar las cuentas.', true);
+  if (revenueResult.error || expenseResult.error || expenseLedgerResult.error) return toast('No se pudieron cargar las cuentas.', true);
   revenueEntries = revenueResult.data || [];
   expenses = expenseResult.data || [];
+  expenseLedger = expenseLedgerResult.data || [];
   renderExpenses();
   renderStats();
 }
@@ -770,7 +773,7 @@ function renderExpenses() {
   const target = document.querySelector('#expenses-list');
   if (!target) return;
   const grossIncome = revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const activeExpenses = expenses.filter(expense => !expense.cancelled_at);
+  const activeExpenses = expenseLedger.filter(expense => !expense.cancelled_at);
   const totalExpenses = activeExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
   document.querySelector('#gross-income').textContent = money(grossIncome);
   document.querySelector('#total-expenses').textContent = money(totalExpenses);
@@ -807,7 +810,7 @@ async function deleteExpense(event) {
   const id = event.currentTarget.dataset.deleteExpense;
   const expense = expenses.find(item => item.id === id);
   if (!expense) return;
-  if (!expense.cancelled_at && !confirm('¿Seguro que quieres eliminar este gasto? Se borrará de la base de datos y dejará de restarse de los ingresos.')) return;
+  if (!expense.cancelled_at && !confirm('¿Seguro que quieres eliminar este ticket de la lista? El gasto seguirá restándose de los ingresos porque ya forma parte del historial contable.')) return;
   const { error } = await db.rpc('delete_expense', { p_expense_id:id });
   if (error) return toast('No se pudo eliminar el gasto.', true);
   toast('Ticket eliminado.');
