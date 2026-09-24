@@ -61,6 +61,10 @@ let staffOrders = [];
 let activeOrderFilter = 'all';
 let inquiries = [];
 let activeInquiryFilter = 'all';
+let claims = [];
+let activeClaimFilter = 'all';
+let revenueEntries = [];
+let expenses = [];
 
 // 6. Avisos flotantes
 // Crea notificaciones apiladas. Por eso si anades varios materiales rapido,
@@ -388,9 +392,8 @@ async function showProfile() {
   document.querySelector('#profile-name').textContent = currentProfile?.full_name || 'Bienvenido';
   document.querySelector('#profile-role').textContent = `${roleNames[currentProfile?.role] || 'Cliente'} · @${currentProfile?.username || ''}`;
   document.querySelector('#logout-button').addEventListener('click', async () => { await db.auth.signOut(); location.reload(); });
-  const { data: orders } = await db.from('orders').select('*, order_items(*)').eq('user_id', currentSession.user.id).order('created_at', { ascending:false });
-  const orderTarget = document.querySelector('#my-orders');
-  if (orders?.length) orderTarget.innerHTML = orders.map(order => `<article class="mini-order"><div><strong>${new Date(order.created_at).toLocaleDateString('es-ES')}</strong><span>${order.order_items.map(item => `${item.quantity}× ${escapeHTML(item.product_name)}`).join(', ')}</span></div><div><strong>${money(order.total)}</strong><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div></article>`).join('');
+  initProfileEditForm();
+  await loadCustomerOrders();
   const { data: application } = await db.from('job_applications').select('*').eq('user_id', currentSession.user.id).maybeSingle();
   const area = document.querySelector('#application-area');
   if (currentProfile?.role !== 'customer') area.innerHTML = '<p>Tu cuenta ya forma parte del equipo de K.I.D.</p>';
@@ -402,9 +405,114 @@ async function showProfile() {
   });
 }
 
+// Permite corregir nombre, usuario y teléfono. La Edge Function actualiza a la
+// vez profiles y el email interno de Auth para que el nuevo usuario siga
+// funcionando la próxima vez que la persona inicie sesión.
+function initProfileEditForm() {
+  const form = document.querySelector('#profile-edit-form');
+  if (!form || !currentProfile) return;
+  form.elements.full_name.value = currentProfile.full_name || '';
+  form.elements.username.value = currentProfile.username || '';
+  form.elements.phone.value = currentProfile.phone || '';
+  form.addEventListener('submit', updateMyProfile);
+}
+
+async function updateMyProfile(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const target = document.querySelector('#profile-edit-message');
+  const data = new FormData(form);
+  const fullName = data.get('full_name').trim();
+  const username = normalizeUsername(data.get('username'));
+  const phone = data.get('phone').trim();
+  if (fullName.length < 2) { target.textContent = 'Escribe un nombre válido.'; return; }
+  if (!/^[a-z0-9._-]{3,24}$/.test(username)) { target.textContent = 'El usuario debe tener entre 3 y 24 caracteres válidos.'; return; }
+  if (!/^[0-9]{10}$/.test(phone)) { target.textContent = 'El teléfono debe contener exactamente 10 números.'; return; }
+
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true; button.textContent = 'Guardando…'; target.textContent = '';
+  const { data: response, error } = await db.functions.invoke('register-user', {
+    body:{ action:'update-profile', fullName, username, phone },
+  });
+  button.disabled = false; button.textContent = 'Guardar cambios';
+  if (error || response?.error) {
+    let message = response?.error || 'No se pudieron guardar los cambios.';
+    if (error?.context) {
+      try { message = (await error.context.json()).error || message; } catch {}
+    }
+    target.textContent = message;
+    return;
+  }
+
+  currentProfile = { ...currentProfile, full_name:fullName, username, phone };
+  document.querySelector('#profile-name').textContent = fullName;
+  document.querySelector('#profile-role').textContent = `${roleNames[currentProfile.role] || 'Cliente'} · @${username}`;
+  target.textContent = `Datos guardados. La próxima vez inicia sesión como @${username}.`;
+  toast('Datos del perfil actualizados.');
+}
+
+// Carga los pedidos visibles del cliente. Cada tarjeta permite quitar el
+// pedido de su perfil o abrir una reclamación asociada a ese pedido concreto.
+async function loadCustomerOrders() {
+  const orderTarget = document.querySelector('#my-orders');
+  if (!orderTarget) return;
+  const { data: orders, error } = await db
+    .from('orders')
+    .select('*, order_items(*), order_claims(*)')
+    .eq('user_id', currentSession.user.id)
+    .order('created_at', { ascending:false });
+  if (error) { orderTarget.innerHTML = '<p>No se pudieron cargar tus pedidos.</p>'; return; }
+  if (!orders?.length) { orderTarget.innerHTML = '<p>Aún no tienes pedidos.</p>'; return; }
+
+  orderTarget.innerHTML = orders.map(order => {
+    const openClaim = order.order_claims?.find(claim => claim.status === 'new');
+    return `<article class="mini-order customer-order-card"><div><strong>${new Date(order.created_at).toLocaleDateString('es-ES')}</strong><span>${order.order_items.map(item => `${item.quantity}× ${escapeHTML(item.product_name)}`).join(', ')}</span><small>Pedido ${escapeHTML(order.id.slice(0, 8).toUpperCase())}</small></div><div class="customer-order-summary"><strong>${money(order.total)}</strong><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div><div class="customer-order-actions">${openClaim ? '<span class="claim-pending-label">Reclamación pendiente</span>' : `<button class="outline-button" type="button" data-open-claim="${order.id}">Reclamar</button>`}<button class="danger-button" type="button" data-customer-delete-order="${order.id}">Eliminar</button></div>${openClaim ? '' : `<form class="claim-form" data-claim-form="${order.id}" hidden><label>Motivo de la reclamación<textarea name="message" rows="4" minlength="5" maxlength="2000" required placeholder="Explícanos qué ha ocurrido con este pedido..."></textarea></label><div class="claim-form-actions"><button class="submit-button" type="submit">Enviar reclamación</button><button class="outline-button" type="button" data-close-claim="${order.id}">Cancelar</button></div></form>`}</article>`;
+  }).join('');
+
+  orderTarget.querySelectorAll('[data-open-claim]').forEach(button => button.addEventListener('click', () => {
+    orderTarget.querySelector(`[data-claim-form="${button.dataset.openClaim}"]`).hidden = false;
+    button.hidden = true;
+  }));
+  orderTarget.querySelectorAll('[data-close-claim]').forEach(button => button.addEventListener('click', () => {
+    orderTarget.querySelector(`[data-claim-form="${button.dataset.closeClaim}"]`).hidden = true;
+    orderTarget.querySelector(`[data-open-claim="${button.dataset.closeClaim}"]`).hidden = false;
+  }));
+  orderTarget.querySelectorAll('[data-claim-form]').forEach(form => form.addEventListener('submit', submitClaim));
+  orderTarget.querySelectorAll('[data-customer-delete-order]').forEach(button => button.addEventListener('click', customerDeleteOrder));
+}
+
+async function customerDeleteOrder(event) {
+  const id = event.currentTarget.dataset.customerDeleteOrder;
+  const warning = 'El pedido desaparecerá de tu perfil. Si aún está pendiente, la empresa lo verá como cancelado. ¿Quieres continuar?';
+  if (!confirm(warning)) return;
+  const { error } = await db.rpc('customer_remove_order', { p_order_id:id });
+  if (error) return toast('No se pudo eliminar el pedido.', true);
+  toast('Pedido eliminado de tu perfil.');
+  await loadCustomerOrders();
+}
+
+async function submitClaim(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const message = new FormData(form).get('message').trim();
+  if (message.length < 5) return toast('Explica el motivo de la reclamación.', true);
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true; button.textContent = 'Enviando…';
+  const { error } = await db.from('order_claims').insert({
+    order_id:form.dataset.claimForm,
+    user_id:currentSession.user.id,
+    message,
+  });
+  button.disabled = false; button.textContent = 'Enviar reclamación';
+  if (error) return toast(error.code === '23505' ? 'Este pedido ya tiene una reclamación pendiente.' : 'No se pudo enviar la reclamación.', true);
+  toast('Reclamación enviada a la empresa.');
+  await loadCustomerOrders();
+}
+
 // 21. Panel de trabajo
-// Protege la pagina del panel: solo worker, boss y admin entran. Boss y admin
-// cargan tambien catalogo, solicitudes, dudas y gestion de trabajadores.
+// Protege la pagina del panel: solo worker, boss y admin entran. Todo el equipo
+// puede ver pedidos, dudas y reclamaciones. Boss y admin cargan además catálogo,
+// solicitudes de trabajo y gestión de trabajadores.
 async function initPanel() {
   if (!document.querySelector('.admin-page')) return;
   const denied = document.querySelector('#access-denied');
@@ -416,9 +524,11 @@ async function initPanel() {
   const isManagement = managementRoles.includes(currentProfile.role);
   document.querySelector('#admin-stats').hidden = !isManagement;
   document.querySelectorAll('.management-only').forEach(element => element.hidden = !isManagement);
-  initPanelTabs(); initOrderFilters(); initMessageTabs(); initInquiryFilters();
+  initPanelTabs(); initOrderFilters(); initMessageTabs(isManagement); initInquiryFilters(); initClaimFilters(); initExpenseForm();
   await loadStaffOrders();
-  if (isManagement) { await loadApplications(); await loadInquiries(); await loadAdminProducts(); await loadWorkers(); }
+  await loadInquiries();
+  await loadClaims();
+  if (isManagement) { await loadApplications(); await loadFinancialData(); await loadAdminProducts(); await loadWorkers(); }
   const requestedSection = new URLSearchParams(location.search).get('section');
   const initialPanel = requestedSection === 'employees' && isManagement ? 'workers' : 'orders';
   document.querySelector(`.panel-tab[data-panel="${initialPanel}"]`)?.click();
@@ -431,12 +541,13 @@ function initPanelTabs() {
   document.querySelectorAll('.panel-tab').forEach(tab => tab.addEventListener('click', () => {
     document.querySelectorAll('.panel-tab').forEach(item => item.classList.toggle('is-active', item === tab));
     ['orders','catalog','messages','workers'].forEach(name => { document.querySelector(`#${name}-panel`).hidden = tab.dataset.panel !== name; });
-    const employeePanel = ['workers', 'messages'].includes(tab.dataset.panel);
+    const employeePanel = tab.dataset.panel === 'workers';
     const section = employeePanel ? 'employees' : 'orders';
     const url = new URL(location.href);
     url.searchParams.set('section', section);
     history.replaceState({}, '', url);
-    document.querySelector('#dashboard-title').textContent = employeePanel ? 'Gestión de empleados' : 'Gestión minera';
+    const titles = { orders:'Gestión minera', catalog:'Gestión minera', workers:'Gestión de empleados', messages:'Dudas y reclamaciones' };
+    document.querySelector('#dashboard-title').textContent = titles[tab.dataset.panel] || 'Gestión minera';
     document.querySelectorAll('.orders-link').forEach(link => link.toggleAttribute('aria-current', !employeePanel));
     document.querySelectorAll('.employees-link').forEach(link => link.toggleAttribute('aria-current', employeePanel));
   }));
@@ -445,12 +556,15 @@ function initPanelTabs() {
 // 23. Subpestanas y filtros del panel
 // Controlan los filtros de pedidos y la vista de solicitudes/dudas dentro del
 // panel de mensajes.
-function initMessageTabs() {
+function initMessageTabs(isManagement) {
   document.querySelectorAll('.secondary-tab').forEach(tab => tab.addEventListener('click', () => {
     document.querySelectorAll('.secondary-tab').forEach(item => item.classList.toggle('is-active', item === tab));
     document.querySelector('#applications-view').hidden = tab.dataset.messagePanel !== 'applications';
     document.querySelector('#inquiries-view').hidden = tab.dataset.messagePanel !== 'inquiries';
+    document.querySelector('#claims-view').hidden = tab.dataset.messagePanel !== 'claims';
+    document.querySelector('#expenses-view').hidden = tab.dataset.messagePanel !== 'expenses';
   }));
+  document.querySelector(`[data-message-panel="${isManagement ? 'applications' : 'inquiries'}"]`)?.click();
 }
 
 function initInquiryFilters() {
@@ -458,6 +572,14 @@ function initInquiryFilters() {
     activeInquiryFilter = button.dataset.inquiryFilter;
     document.querySelectorAll('[data-inquiry-filter]').forEach(item => item.classList.toggle('is-active', item === button));
     renderInquiries();
+  }));
+}
+
+function initClaimFilters() {
+  document.querySelectorAll('[data-claim-filter]').forEach(button => button.addEventListener('click', () => {
+    activeClaimFilter = button.dataset.claimFilter;
+    document.querySelectorAll('[data-claim-filter]').forEach(item => item.classList.toggle('is-active', item === button));
+    renderClaims();
   }));
 }
 
@@ -473,19 +595,20 @@ function initOrderFilters() {
 // Carga todos los pedidos con sus order_items, los guarda en staffOrders y
 // refresca tarjetas, materiales necesarios y estadisticas.
 async function loadStaffOrders() {
-  const { data, error } = await db.from('orders').select('*, order_items(*)').order('created_at', { ascending:false });
+  const { data, error } = await db.from('orders').select('*, order_items(*)').is('company_deleted_at', null).order('created_at', { ascending:false });
   if (error) return toast('No se pudieron cargar los pedidos.', true);
   staffOrders = data || []; renderStaffOrders(); renderMaterialsNeeded(); renderStats();
 }
 
 // 25. Render de pedidos
-// Pinta cada pedido interno con cliente, telefono, productos, total, estado y
-// boton de borrado. Despues conecta los selects y botones recien creados.
+// Pinta cada pedido interno con cliente, teléfono, productos, total, estado y
+// botón para quitarlo de la vista de la empresa. El borrado físico lo decide
+// Supabase según las marcas de ambas partes, los 7 días y las reclamaciones.
 function renderStaffOrders() {
   const target = document.querySelector('#staff-orders'); if (!target) return;
   const visible = activeOrderFilter === 'all' ? staffOrders : staffOrders.filter(order => order.status === activeOrderFilter);
   if (!visible.length) { target.innerHTML = '<p class="loading-message">No hay pedidos en esta sección.</p>'; return; }
-  target.innerHTML = visible.map(order => `<article class="staff-order-card"><div><h3>${escapeHTML(order.customer_name)}</h3><p>${new Date(order.created_at).toLocaleString('es-ES')}</p><p>Tel. ${escapeHTML(order.phone)}</p></div><div><p class="order-products">${order.order_items.map(item => `${item.quantity}× ${escapeHTML(item.product_name)}`).join('<br>')}</p>${order.notes ? `<p>Nota: ${escapeHTML(order.notes)}</p>` : ''}</div><p class="order-money">${money(order.total)}</p><div><select class="order-status-select" data-order-status="${order.id}" aria-label="Estado del pedido">${Object.entries(statusNames).map(([value,label]) => `<option value="${value}"${order.status === value ? ' selected' : ''}>${label}</option>`).join('')}</select><button class="delete-order" type="button" data-delete-order="${order.id}" aria-label="Eliminar pedido">×</button></div></article>`).join('');
+  target.innerHTML = visible.map(order => `<article class="staff-order-card"><div><h3>${escapeHTML(order.customer_name)}</h3><p>${new Date(order.created_at).toLocaleString('es-ES')}</p><p>Tel. ${escapeHTML(order.phone)}</p>${order.customer_deleted_at ? '<span class="customer-cancelled-label">El cliente lo eliminó</span>' : ''}</div><div><p class="order-products">${order.order_items.map(item => `${item.quantity}× ${escapeHTML(item.product_name)}`).join('<br>')}</p>${order.notes ? `<p>Nota: ${escapeHTML(order.notes)}</p>` : ''}</div><p class="order-money">${money(order.total)}</p><div><select class="order-status-select" data-order-status="${order.id}" aria-label="Estado del pedido">${Object.entries(statusNames).map(([value,label]) => `<option value="${value}"${order.status === value ? ' selected' : ''}>${label}</option>`).join('')}</select><button class="delete-order" type="button" data-delete-order="${order.id}" aria-label="Eliminar pedido">×</button></div></article>`).join('');
   target.querySelectorAll('[data-order-status]').forEach(select => select.addEventListener('change', updateOrderStatus));
   target.querySelectorAll('[data-delete-order]').forEach(button => button.addEventListener('click', deleteOrder));
 }
@@ -502,15 +625,16 @@ async function updateOrderStatus(event) {
 
 async function deleteOrder(event) {
   const id = event.currentTarget.dataset.deleteOrder;
-  if (!confirm('¿Seguro que quieres borrar este pedido? Esta acción no se puede deshacer.')) return;
-  const { error } = await db.from('orders').delete().eq('id', id);
+  if (!confirm('¿Quitar este pedido de la vista de la empresa? Solo se borrará del servidor cuando también lo elimine el cliente o hayan pasado 7 días.')) return;
+  const { error } = await db.rpc('staff_remove_order', { p_order_id:id });
   if (error) return toast('No se pudo eliminar.', true);
-  staffOrders = staffOrders.filter(order => order.id !== id); renderStaffOrders(); renderMaterialsNeeded(); renderStats(); toast('Pedido eliminado.');
+  staffOrders = staffOrders.filter(order => order.id !== id); renderStaffOrders(); renderMaterialsNeeded(); renderStats(); toast('Pedido eliminado de la vista de la empresa.');
 }
 
 // 27. Materiales necesarios y estadisticas
-// Suma cantidades de pedidos pendientes/preparando y calcula ingresos de los
-// ultimos 7 dias solo con pedidos completados.
+// Suma cantidades de pedidos pendientes/preparando. Los ingresos ya no se
+// calculan desde los pedidos visibles, sino desde revenue_ledger, para que un
+// pedido completado pueda borrarse sin hacer desaparecer el dinero ganado.
 function renderMaterialsNeeded() {
   const totals = {};
   staffOrders.filter(order => ['pending','preparing'].includes(order.status)).forEach(order => order.order_items.forEach(item => { totals[item.product_name] = (totals[item.product_name] || 0) + item.quantity; }));
@@ -520,9 +644,9 @@ function renderMaterialsNeeded() {
 
 function renderStats() {
   if (!managementRoles.includes(currentProfile?.role)) return;
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const income = staffOrders.filter(order => order.status === 'completed' && new Date(order.created_at).getTime() >= weekAgo).reduce((sum, order) => sum + Number(order.total), 0);
-  document.querySelector('#weekly-income').textContent = money(income);
+  const grossIncome = revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const totalExpenses = expenses.filter(expense => !expense.cancelled_at).reduce((sum, expense) => sum + Number(expense.amount), 0);
+  document.querySelector('#total-income').textContent = money(grossIncome - totalExpenses);
   document.querySelector('#active-orders').textContent = staffOrders.filter(order => ['pending','preparing','ready'].includes(order.status)).length;
 }
 
@@ -530,7 +654,7 @@ function renderStats() {
 // Carga solicitudes pendientes/aceptadas/rechazadas. Al aceptar, se puede dar
 // rol worker o boss mediante la funcion SQL review_application.
 async function loadApplications() {
-  const { data, error } = await db.from('job_applications').select('*').order('created_at', { ascending:false });
+  const { data, error } = await db.from('job_applications').select('*').eq('status', 'pending').order('created_at', { ascending:false });
   if (error) return;
   document.querySelector('#pending-applications').textContent = data.filter(item => item.status === 'pending').length;
   document.querySelector('#application-tab-count').textContent = data.filter(item => item.status === 'pending').length;
@@ -540,14 +664,15 @@ async function loadApplications() {
 }
 
 // 29. Dudas y mensajes de contacto
-// Carga la tabla inquiries para que admin/jefe pueda marcar dudas como
-// resueltas, reabrirlas o eliminarlas.
+// Carga las dudas para todo el equipo. Los trabajadores pueden leerlas;
+// jefe y admin también pueden resolverlas, reabrirlas o eliminarlas.
 async function loadInquiries() {
   const { data, error } = await db.from('inquiries').select('*').order('created_at', { ascending:false });
   if (error) return toast('No se pudieron cargar las dudas.', true);
   inquiries = data || [];
   const pending = inquiries.filter(item => item.status === 'new').length;
-  document.querySelector('#pending-inquiries').textContent = pending;
+  const pendingTarget = document.querySelector('#pending-inquiries');
+  if (pendingTarget) pendingTarget.textContent = pending;
   document.querySelector('#inquiry-tab-count').textContent = pending;
   renderInquiries();
 }
@@ -556,7 +681,8 @@ function renderInquiries() {
   const target = document.querySelector('#inquiries-list');
   if (!target) return;
   const visible = activeInquiryFilter === 'all' ? inquiries : inquiries.filter(item => item.status === activeInquiryFilter);
-  target.innerHTML = visible.length ? visible.map(item => `<article class="application-card inquiry-card${item.status === 'resolved' ? ' is-resolved' : ''}"><div><h3>${escapeHTML(item.name)}</h3><p>${new Date(item.created_at).toLocaleString('es-ES')} · Tel. ${escapeHTML(item.phone)}</p><p class="inquiry-text">${escapeHTML(item.message)}</p></div><div class="row-actions">${item.status === 'new' ? `<button class="approve" type="button" data-inquiry-status="resolved" data-id="${item.id}">Marcar resuelta</button>` : `<button type="button" data-inquiry-status="new" data-id="${item.id}">Reabrir</button>`}<button class="danger" type="button" data-delete-inquiry="${item.id}">Eliminar</button></div></article>`).join('') : '<p class="loading-message">No hay dudas en esta sección.</p>';
+  const canManage = managementRoles.includes(currentProfile?.role);
+  target.innerHTML = visible.length ? visible.map(item => `<article class="application-card inquiry-card${item.status === 'resolved' ? ' is-resolved' : ''}"><div><h3>${escapeHTML(item.name)}</h3><p>${new Date(item.created_at).toLocaleString('es-ES')} · Tel. ${escapeHTML(item.phone)}</p><p class="inquiry-text">${escapeHTML(item.message)}</p></div>${canManage ? `<div class="row-actions">${item.status === 'new' ? `<button class="approve" type="button" data-inquiry-status="resolved" data-id="${item.id}">Marcar resuelta</button>` : `<button type="button" data-inquiry-status="new" data-id="${item.id}">Reabrir</button>`}<button class="danger" type="button" data-delete-inquiry="${item.id}">Eliminar</button></div>` : '<span class="read-only-label">Solo lectura</span>'}</article>`).join('') : '<p class="loading-message">No hay dudas en esta sección.</p>';
   target.querySelectorAll('[data-inquiry-status]').forEach(button => button.addEventListener('click', updateInquiryStatus));
   target.querySelectorAll('[data-delete-inquiry]').forEach(button => button.addEventListener('click', deleteInquiry));
 }
@@ -584,7 +710,100 @@ async function reviewApplication(event) {
   toast('Solicitud actualizada.'); await loadApplications();
 }
 
-// 30. Trabajadores y jefes
+// 30. Reclamaciones de pedidos
+// Se muestran separadas de las dudas. Incluyen el pedido, los materiales y el
+// mensaje del cliente. Todo el equipo puede resolverlas o reabrirlas.
+async function loadClaims() {
+  const { data, error } = await db
+    .from('order_claims')
+    .select('*, orders(*, order_items(*))')
+    .order('created_at', { ascending:false });
+  if (error) return toast('No se pudieron cargar las reclamaciones.', true);
+  claims = data || [];
+  const pending = claims.filter(item => item.status === 'new').length;
+  document.querySelector('#claim-tab-count').textContent = pending;
+  renderClaims();
+}
+
+function renderClaims() {
+  const target = document.querySelector('#claims-list');
+  if (!target) return;
+  const visible = activeClaimFilter === 'all' ? claims : claims.filter(item => item.status === activeClaimFilter);
+  target.innerHTML = visible.length ? visible.map(item => {
+    const order = item.orders;
+    const products = order?.order_items?.map(product => `${product.quantity}× ${escapeHTML(product.product_name)}`).join('<br>') || 'Pedido no disponible';
+    return `<article class="application-card inquiry-card claim-card${item.status === 'resolved' ? ' is-resolved' : ''}"><div><h3>Reclamación · pedido ${escapeHTML(String(item.order_id).slice(0, 8).toUpperCase())}</h3><p>${new Date(item.created_at).toLocaleString('es-ES')}${order ? ` · ${escapeHTML(order.customer_name)} · Tel. ${escapeHTML(order.phone)}` : ''}</p>${order ? `<div class="claim-order-data"><p>${products}</p><strong>${money(order.total)}</strong><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div>` : ''}<p class="inquiry-text">${escapeHTML(item.message)}</p></div><div class="row-actions">${item.status === 'new' ? `<button class="approve" type="button" data-claim-status="resolved" data-id="${item.id}">Marcar resuelta</button>` : `<button type="button" data-claim-status="new" data-id="${item.id}">Reabrir</button>`}</div></article>`;
+  }).join('') : '<p class="loading-message">No hay reclamaciones en esta sección.</p>';
+  target.querySelectorAll('[data-claim-status]').forEach(button => button.addEventListener('click', updateClaimStatus));
+}
+
+async function updateClaimStatus(event) {
+  const status = event.currentTarget.dataset.claimStatus;
+  const { error } = await db.from('order_claims').update({ status }).eq('id', event.currentTarget.dataset.id);
+  if (error) return toast('No se pudo actualizar la reclamación.', true);
+  toast(status === 'resolved' ? 'Reclamación marcada como resuelta.' : 'Reclamación reabierta.');
+  await loadClaims();
+  await loadStaffOrders();
+}
+
+// 31. Gastos e ingresos históricos
+// Solo boss y admin cargan esta información. Los tickets cancelados se
+// conservan para dejar constancia, pero dejan de restarse de los ingresos.
+function initExpenseForm() {
+  const form = document.querySelector('#expense-form');
+  form?.addEventListener('submit', createExpense);
+}
+
+async function loadFinancialData() {
+  const [revenueResult, expenseResult] = await Promise.all([
+    db.from('revenue_ledger').select('*').order('completed_at', { ascending:false }),
+    db.from('expenses').select('*').order('created_at', { ascending:false }),
+  ]);
+  if (revenueResult.error || expenseResult.error) return toast('No se pudieron cargar las cuentas.', true);
+  revenueEntries = revenueResult.data || [];
+  expenses = expenseResult.data || [];
+  renderExpenses();
+  renderStats();
+}
+
+function renderExpenses() {
+  const target = document.querySelector('#expenses-list');
+  if (!target) return;
+  const grossIncome = revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const activeExpenses = expenses.filter(expense => !expense.cancelled_at);
+  const totalExpenses = activeExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  document.querySelector('#gross-income').textContent = money(grossIncome);
+  document.querySelector('#total-expenses').textContent = money(totalExpenses);
+  document.querySelector('#net-income').textContent = money(grossIncome - totalExpenses);
+  document.querySelector('#expense-tab-count').textContent = activeExpenses.length;
+
+  target.innerHTML = expenses.length ? expenses.map(expense => `<article class="application-card expense-ticket${expense.cancelled_at ? ' is-cancelled' : ''}"><div><h3>${escapeHTML(expense.concept)}</h3><p>${new Date(expense.created_at).toLocaleString('es-ES')} · ${escapeHTML(expense.created_by_name)}</p>${expense.cancelled_at ? `<span class="expense-cancelled-label">Cancelado el ${new Date(expense.cancelled_at).toLocaleString('es-ES')}</span>` : ''}</div><strong class="expense-amount">−${money(expense.amount)}</strong>${expense.cancelled_at ? '' : `<div class="row-actions"><button class="danger" type="button" data-cancel-expense="${expense.id}">Cancelar ticket</button></div>`}</article>`).join('') : '<p class="loading-message">Todavía no hay tickets de gastos.</p>';
+  target.querySelectorAll('[data-cancel-expense]').forEach(button => button.addEventListener('click', cancelExpense));
+}
+
+async function createExpense(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const amount = Number(data.get('amount'));
+  const concept = data.get('concept').trim();
+  if (!Number.isFinite(amount) || amount <= 0 || concept.length < 2) return toast('Completa el importe y el concepto.', true);
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true; button.textContent = 'Creando…';
+  const { error } = await db.rpc('create_expense', { p_amount:amount, p_concept:concept });
+  button.disabled = false; button.textContent = 'Crear ticket';
+  if (error) return toast('No se pudo crear el ticket.', true);
+  form.reset(); toast('Ticket de gasto creado.'); await loadFinancialData();
+}
+
+async function cancelExpense(event) {
+  if (!confirm('¿Cancelar este ticket? Dejará de restarse de los ingresos y podrás crear uno nuevo.')) return;
+  const { error } = await db.rpc('cancel_expense', { p_expense_id:event.currentTarget.dataset.cancelExpense });
+  if (error) return toast('No se pudo cancelar el ticket.', true);
+  toast('Ticket cancelado.'); await loadFinancialData();
+}
+
+// 32. Trabajadores y jefes
 // Lista perfiles con rol worker o boss. Permite cambiar entre trabajador/jefe
 // o quitar permisos para devolver la cuenta a customer.
 async function loadWorkers() {
@@ -612,14 +831,14 @@ async function changeWorkerRole(event) {
   await loadWorkers();
 }
 
-// 31. Catalogo admin
+// 33. Catalogo admin
 // Carga todos los productos, incluidos ocultos/inactivos, para que admin/jefe
 // pueda revisar, editar o borrar materiales desde el panel.
 async function loadAdminProducts() {
   await loadProducts(true); renderAdminProducts();
 }
 
-// 32. Formulario de materiales
+// 34. Formulario de materiales
 // Conecta el formulario de crear/editar material y actualiza la vista previa de
 // imagen en vivo mientras se escribe la URL.
 function initProductForm() {
@@ -631,7 +850,7 @@ function initProductForm() {
   updateProductFormPreview();
 }
 
-// 33. Vista previa de imagenes
+// 35. Vista previa de imagenes
 // Intenta cargar la URL en un <img>. Si carga, marca la imagen como disponible;
 // si falla, ensena un aviso para detectar enlaces rotos antes de publicar.
 function showImagePreview(container, url, statusTarget = null) {
@@ -670,7 +889,7 @@ function updateProductFormPreview() {
   );
 }
 
-// 34. Lista admin de materiales
+// 36. Lista admin de materiales
 // Pinta cada material con miniatura, precio, categoria y acciones. La miniatura
 // tambien usa showImagePreview para detectar imagenes rotas en la lista.
 function renderAdminProducts() {
@@ -681,7 +900,7 @@ function renderAdminProducts() {
   target.querySelectorAll('[data-delete-product]').forEach(button => button.addEventListener('click', deleteProduct));
 }
 
-// 35. Guardar material
+// 37. Guardar material
 // Si el campo hidden id tiene valor, actualiza un producto existente. Si no lo
 // tiene, inserta uno nuevo en la tabla products.
 async function saveProduct(event) {
@@ -715,12 +934,16 @@ async function deleteProduct(event) {
   toast('Material eliminado.'); await loadAdminProducts();
 }
 
-// 36. Formulario publico de dudas
+// 38. Formulario publico de dudas
 // Envia consultas a la tabla inquiries. Valida que el telefono sean exactamente
 // 10 numeros antes de intentar guardar.
 function initInquiryForm() {
   const form = document.querySelector('#inquiry-form');
   if (!form) return;
+  if (currentProfile) {
+    form.elements.name.value ||= currentProfile.full_name || '';
+    form.elements.phone.value ||= currentProfile.phone || '';
+  }
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const messageTarget = document.querySelector('#inquiry-message');
@@ -741,7 +964,7 @@ function initInquiryForm() {
   });
 }
 
-// 37. Avisos por parametros de URL
+// 39. Avisos por parametros de URL
 // Permite mostrar avisos o abrir el carrito cuando la pagina viene con
 // parametros como ?duda=ok o ?carrito=1.
 function showQueryToast() {
@@ -750,7 +973,7 @@ function showQueryToast() {
   if (params.get('carrito') === '1') setTimeout(openCart, 250);
 }
 
-// 38. Arranque general
+// 40. Arranque general
 // Este es el orden en el que se enciende la web. Cada init comprueba si su zona
 // existe, por eso el mismo script sirve para inicio, productos, cuenta y panel.
 async function start() {

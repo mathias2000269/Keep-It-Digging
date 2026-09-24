@@ -1093,9 +1093,22 @@ button { border-radius:0; }
 .outline-button { padding:13px 18px; border:1px solid #777; background:transparent; color:inherit; cursor:pointer; font-weight:800; }
 .outline-button:hover { border-color:var(--yellow); color:#997400; }
 .profile-grid { display:grid; grid-template-columns:1.1fr .9fr; gap:25px; }
+.profile-edit-card { grid-column:1/-1; }
 .profile-card h2,.catalog-form h2,.materials-summary h2 { margin:0 0 22px; font-family:var(--display); font-size:2.4rem; text-transform:uppercase; }
 .mini-order { padding:15px 0; display:flex; justify-content:space-between; gap:18px; border-bottom:1px solid #333; }
 .mini-order span { color:#aaa; font-size:.8rem; }
+.customer-order-card { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; }
+.customer-order-card > div:first-child { display:grid; gap:5px; }
+.customer-order-card small { color:#6f6f6f; font-size:.66rem; text-transform:uppercase; }
+.customer-order-summary { display:grid; justify-items:end; gap:7px; }
+.customer-order-actions { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.customer-order-actions button { padding:9px 12px; }
+.danger-button { border:1px solid #ba4035; background:#ba4035; color:#fff; cursor:pointer; font-weight:800; }
+.claim-pending-label,.customer-cancelled-label,.read-only-label { display:inline-flex; width:max-content; padding:6px 9px; background:#3a2e0b; color:var(--yellow)!important; font-size:.67rem!important; font-weight:900; text-transform:uppercase; }
+.claim-form { grid-column:1/-1; margin-top:12px; padding:15px; background:#171717; border:1px solid #3b3b3b; }
+.claim-form textarea { width:100%; margin-top:8px; padding:12px; border:1px solid #555; background:#0d0d0d; color:#fff; resize:vertical; }
+.claim-form-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.claim-form-actions .submit-button { width:auto; }
 .status-badge { display:inline-flex; padding:6px 9px; background:#252525; color:#ddd; font-size:.7rem; font-weight:800; text-transform:uppercase; }
 .status-pending { color:#ffd54a; }.status-preparing { color:#7fc8ff; }.status-ready { color:#74dc8d; }.status-completed { color:#aaa; }.status-cancelled { color:#ff7d72; }
 .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; margin-bottom:26px; }
@@ -1119,6 +1132,7 @@ button { border-radius:0; }
 .staff-order-card { padding:24px; display:grid; grid-template-columns:1.2fr 1fr .8fr auto; gap:20px; align-items:center; background:#fff; border:1px solid #d8d2c7; }
 .staff-order-card h3 { margin:0 0 5px; font-family:var(--display); font-size:1.55rem; text-transform:uppercase; }
 .staff-order-card p { margin:3px 0; color:#6c6962; font-size:.82rem; }
+.staff-order-card .customer-cancelled-label { margin-top:8px; background:#f1d9d6; color:#9c2f26!important; }
 .order-products { color:#222!important; }
 .order-money { font-family:var(--display); font-size:1.65rem!important; font-weight:800; }
 .order-status-select { padding:10px; border:1px solid #bbb; background:#f7f4ed; }
@@ -1150,6 +1164,20 @@ button { border-radius:0; }
 .inquiry-card { align-items:start; }
 .inquiry-card.is-resolved { opacity:.68; }
 .application-card .inquiry-text { max-width:760px; margin-top:12px; color:#242321; font-size:.92rem; line-height:1.6; white-space:pre-wrap; }
+.claim-order-data { max-width:760px; margin-top:12px; padding:12px; display:flex; flex-wrap:wrap; align-items:center; gap:12px; background:#f4f0e7; border-left:4px solid var(--yellow); }
+.claim-order-data p { flex:1 1 280px; color:#242321; line-height:1.5; }
+.claim-order-data strong { font-family:var(--display); font-size:1.35rem; }
+.finance-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px; }
+.finance-summary article { padding:20px; background:#111; color:#fff; border-bottom:4px solid var(--yellow); }
+.finance-summary span { display:block; color:#999; font-size:.7rem; font-weight:800; text-transform:uppercase; }
+.finance-summary strong { display:block; margin-top:6px; color:var(--yellow); font-family:var(--display); font-size:2rem; }
+.expense-form { margin-bottom:22px; padding:20px; display:grid; grid-template-columns:180px minmax(240px,1fr) auto; gap:14px; align-items:end; background:#111; color:#fff; }
+.expense-form input { width:100%; margin-top:7px; padding:12px; border:1px solid #444; background:#181818; color:#fff; }
+.expense-form .submit-button { width:auto; white-space:nowrap; }
+.expense-ticket { grid-template-columns:minmax(0,1fr) auto auto; }
+.expense-ticket.is-cancelled { opacity:.58; }
+.expense-amount { align-self:center; color:#a52d25; font-family:var(--display); font-size:1.7rem; }
+.expense-cancelled-label { display:inline-flex; margin-top:8px; padding:5px 8px; background:#dedad1; color:#5d5a54; font-size:.66rem; font-weight:900; text-transform:uppercase; }
 .row-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .row-actions button { padding:9px 12px; border:1px solid #222; background:#111; color:#fff; cursor:pointer; }
 .row-actions .danger { border-color:#b33; background:#b33; }
@@ -1170,13 +1198,14 @@ button { border-radius:0; }
   .account-button,.cart-button { width:100%; margin:0; }
   .account-menu { right:20px; }
   .auth-layout,.profile-grid { grid-template-columns:1fr; }
+  .profile-edit-card { grid-column:auto; }
   .question-section { grid-template-columns:1fr; }
-  .stats-grid { grid-template-columns:1fr 1fr; }
+  .stats-grid,.finance-summary { grid-template-columns:1fr 1fr; }
   .staff-order-card { grid-template-columns:1fr 1fr; }
 }
 @media (max-width:620px) {
   .cart-drawer { padding:20px; }
-  .cart-customer-fields,.stats-grid,.catalog-form { grid-template-columns:1fr; }
+  .cart-customer-fields,.stats-grid,.catalog-form,.finance-summary,.expense-form { grid-template-columns:1fr; }
   .catalog-form > div:first-child,.catalog-form .full-width { grid-column:auto; }
   .product-image-preview { grid-template-columns:1fr; }
   .preview-label { grid-column:auto; }
@@ -1186,6 +1215,8 @@ button { border-radius:0; }
   .question-actions .submit-button { width:100%; }
   .staff-order-card { grid-template-columns:1fr; }
   .auth-card,.profile-card,.catalog-form { padding:26px 20px; box-shadow:7px 7px 0 var(--yellow); }
-  .admin-product-row,.application-card { grid-template-columns:1fr; }
+  .admin-product-row,.application-card,.expense-ticket { grid-template-columns:1fr; }
+  .customer-order-card { grid-template-columns:1fr; }
+  .customer-order-summary { justify-items:start; }
   .admin-product-thumb { width:100%; height:160px; }
 }
