@@ -535,18 +535,18 @@ async function initPanel() {
 }
 
 // 22. Pestanas principales del panel
-// Alterna entre pedidos, catalogo, mensajes y trabajadores. Tambien actualiza
+// Alterna entre pedidos, catalogo, mensajes, trabajadores y gastos. Tambien actualiza
 // la URL con ?section=orders o ?section=employees sin recargar la pagina.
 function initPanelTabs() {
   document.querySelectorAll('.panel-tab').forEach(tab => tab.addEventListener('click', () => {
     document.querySelectorAll('.panel-tab').forEach(item => item.classList.toggle('is-active', item === tab));
-    ['orders','catalog','messages','workers'].forEach(name => { document.querySelector(`#${name}-panel`).hidden = tab.dataset.panel !== name; });
+    ['orders','catalog','messages','workers','expenses'].forEach(name => { document.querySelector(`#${name}-panel`).hidden = tab.dataset.panel !== name; });
     const employeePanel = tab.dataset.panel === 'workers';
     const section = employeePanel ? 'employees' : 'orders';
     const url = new URL(location.href);
     url.searchParams.set('section', section);
     history.replaceState({}, '', url);
-    const titles = { orders:'Gestión minera', catalog:'Gestión minera', workers:'Gestión de empleados', messages:'Dudas y reclamaciones' };
+    const titles = { orders:'Gestión minera', catalog:'Gestión minera', workers:'Gestión de empleados', messages:'Dudas y reclamaciones', expenses:'Gastos e ingresos' };
     document.querySelector('#dashboard-title').textContent = titles[tab.dataset.panel] || 'Gestión minera';
     document.querySelectorAll('.orders-link').forEach(link => link.toggleAttribute('aria-current', !employeePanel));
     document.querySelectorAll('.employees-link').forEach(link => link.toggleAttribute('aria-current', employeePanel));
@@ -562,7 +562,6 @@ function initMessageTabs(isManagement) {
     document.querySelector('#applications-view').hidden = tab.dataset.messagePanel !== 'applications';
     document.querySelector('#inquiries-view').hidden = tab.dataset.messagePanel !== 'inquiries';
     document.querySelector('#claims-view').hidden = tab.dataset.messagePanel !== 'claims';
-    document.querySelector('#expenses-view').hidden = tab.dataset.messagePanel !== 'expenses';
   }));
   document.querySelector(`[data-message-panel="${isManagement ? 'applications' : 'inquiries'}"]`)?.click();
 }
