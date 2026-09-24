@@ -35,7 +35,7 @@ create table public.products (
 
 create table public.orders (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete restrict,
+  user_id uuid references auth.users(id) on delete restrict,
   customer_name text not null,
   phone text not null check (phone ~ '^[0-9]{5,15}$'),
   notes text not null default '',
@@ -153,7 +153,6 @@ declare
   v_requested integer;
   v_valid integer;
 begin
-  if (select auth.uid()) is null then raise exception 'Debes iniciar sesión'; end if;
   if trim(p_customer_name) = '' then raise exception 'Falta el nombre'; end if;
   if p_phone !~ '^[0-9]{5,15}$' then raise exception 'Teléfono no válido'; end if;
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
@@ -219,8 +218,8 @@ begin
 end;
 $$;
 
-revoke all on function public.place_order(text,text,text,jsonb) from public, anon;
-grant execute on function public.place_order(text,text,text,jsonb) to authenticated;
+revoke all on function public.place_order(text,text,text,jsonb) from public;
+grant execute on function public.place_order(text,text,text,jsonb) to anon, authenticated;
 revoke all on function public.review_application(uuid,public.application_status,public.user_role) from public, anon;
 grant execute on function public.review_application(uuid,public.application_status,public.user_role) to authenticated;
 

@@ -5,15 +5,10 @@
   <link rel="icon" href="assets/logo2.png"><link rel="stylesheet" href="styles.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script><script src="config.js"></script><script src="script.js" defer></script>
 </head>
 <body data-page="cuenta">
-  <header class="site-header"><a class="brand" href="index.html"><img src="assets/logo2.png" alt="Logo de K.I.D."></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav"><span></span><span></span><span></span></button><nav id="main-nav" class="main-nav">
-    <a href="index.html">Inicio</a>
-    <a href="productos.html">Productos</a>
-    <a href="contacto.html">Contacto</a>
-    <a class="orders-link" href="panel.html?section=orders">Trabajo></a>
-    <button class="cart-button" type="button" aria-label="Abrir carrito">Carrito <span class="cart-count">0</span></button>
-    <button class="account-button" type="button" aria-label="Abrir menú de usuario">♟</button></nav></header>  <main class="account-page section-shell">
+  <header class="site-header"><a class="brand" href="index.html"><img src="assets/logo2.png" alt="Logo de K.I.D."></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav"><span></span><span></span><span></span></button><nav id="main-nav" class="main-nav"><a href="index.html">Inicio</a><a href="productos.html">Productos</a><a href="contacto.html">Contacto</a><a class="orders-link" href="panel.html?section=orders" hidden>Trabajo</a><button class="cart-button" type="button" aria-label="Abrir carrito">Carrito <span class="cart-count">0</span></button><button class="account-button" type="button" aria-label="Abrir menú de usuario">♟</button></nav></header>
+  <main class="account-page section-shell">
     <section id="auth-view" class="auth-layout">
-      <div class="auth-copy"><p class="eyebrow">Tu cuenta</p><h1>Entra en la mina.</h1><p>Necesitas una cuenta para confirmar pedidos y consultar su estado.</p></div>
+      <div class="auth-copy"><p class="eyebrow">Tu cuenta</p><h1>Entra en la mina.</h1><p>Con una cuenta podrás consultar el estado de tus pedidos. También puedes comprar como invitado usando tu nombre y teléfono.</p></div>
       <div class="auth-card">
         <div class="auth-tabs"><button class="auth-tab is-active" type="button" data-auth-tab="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-tab="register">Crear cuenta</button></div>
         <form id="login-form" class="stack-form"><label>Nombre de usuario<input type="text" name="username" required minlength="3" maxlength="24" autocomplete="username" autocapitalize="none"></label><label>Contraseña<input type="password" name="password" required autocomplete="current-password"></label><button class="submit-button" type="submit">Entrar <span>↗</span></button></form>

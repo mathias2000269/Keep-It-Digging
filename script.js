@@ -66,13 +66,26 @@ function initNavigation() {
     nav?.classList.toggle('is-open', !open);
   });
   const page = document.body.dataset.page;
+  const panelSection = new URLSearchParams(location.search).get('section');
   document.querySelectorAll('.main-nav a').forEach(link => {
     const href = link.getAttribute('href');
-    if ((page === 'inicio' && href === 'index.html') || href === `${page}.html`) link.setAttribute('aria-current', 'page');
+    const isCurrentPage = (page === 'inicio' && href === 'index.html') || href === `${page}.html`;
+    const isCurrentPanel = page === 'panel' && (
+      (link.classList.contains('employees-link') && panelSection === 'employees') ||
+      (link.classList.contains('orders-link') && panelSection !== 'employees')
+    );
+    if (isCurrentPage || isCurrentPanel) link.setAttribute('aria-current', 'page');
   });
   document.querySelectorAll('.account-button').forEach(button => {
     button.innerHTML = '<svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 21a8 8 0 0 1 16 0" fill="currentColor"/></svg>';
     button.addEventListener('click', showAccountMenu);
+  });
+}
+
+function initNumericInputs() {
+  document.addEventListener('input', event => {
+    if (!event.target.matches('input[type="tel"][inputmode="numeric"]')) return;
+    event.target.value = event.target.value.replace(/\D/g, '');
   });
 }
 
@@ -119,10 +132,10 @@ function showAccountMenu(event) {
   const menu = document.createElement('div');
   menu.className = 'account-menu';
   if (currentSession && currentProfile) {
-    menu.innerHTML = `<strong>${escapeHTML(currentProfile.full_name || 'Mi cuenta')}</strong><small>@${escapeHTML(currentProfile.username)}</small><a href="cuenta.html">Mi perfil y pedidos</a>${staffRoles.includes(currentProfile.role) ? '<a href="panel.html?section=orders">Gestionar pedidos</a>' : ''}${managementRoles.includes(currentProfile.role) ? '<a href="panel.html?section=employees">Gestionar empleados</a>' : ''}<button type="button" data-signout>Cerrar sesión</button>`;
+    menu.innerHTML = `<strong>${escapeHTML(currentProfile.full_name || 'Mi cuenta')}</strong><small>@${escapeHTML(currentProfile.username)}</small><a href="cuenta.html">Mi perfil y pedidos</a>${staffRoles.includes(currentProfile.role) ? '<a href="panel.html?section=orders">Gestionar trabajo</a>' : ''}<button type="button" data-signout>Cerrar sesión</button>`;
     menu.querySelector('[data-signout]').addEventListener('click', async () => { await db.auth.signOut(); location.href = 'index.html'; });
   } else {
-    menu.innerHTML = '<strong>Zona de usuario</strong><small>Accede para realizar pedidos</small><a href="cuenta.html">Iniciar sesión</a><a href="cuenta.html?registro=1">Crear cuenta</a>';
+    menu.innerHTML = '<strong>Zona de usuario</strong><small>Accede para consultar y seguir tus pedidos</small><a href="cuenta.html">Iniciar sesión</a><a href="cuenta.html?registro=1">Crear cuenta</a>';
   }
   document.body.append(menu);
   setTimeout(() => document.addEventListener('click', () => menu.remove(), { once:true }), 0);
@@ -224,7 +237,6 @@ function changeCartFromInput(event) {
 async function checkout() {
   if (!cart.length) return toast('Añade algún producto antes de comprar.', true);
   if (!db) return toast('No se pudo completar el pedido en este momento.', true);
-  if (!currentSession) { localStorage.setItem('kid-return', 'productos.html?carrito=1'); location.href = 'cuenta.html'; return; }
   const customerName = document.querySelector('#checkout-name').value.trim();
   const phone = document.querySelector('#checkout-phone').value.trim();
   const notes = document.querySelector('#checkout-notes').value.trim();
@@ -235,7 +247,8 @@ async function checkout() {
   const { error } = await db.rpc('place_order', { p_customer_name:customerName, p_phone:phone, p_notes:notes, p_items:items });
   button.disabled = false; button.innerHTML = 'Confirmar compra <span>↗</span>';
   if (error) return toast(error.message || 'No se pudo enviar el pedido.', true);
-  cart = []; saveCart(); closeCart(); toast('Pedido realizado con éxito.');
+  cart = []; saveCart(); closeCart();
+  toast(currentSession ? 'Pedido realizado con éxito.' : 'Pedido enviado. Te buscaremos por tu nombre y teléfono.');
 }
 
 function initAuthTabs() {
@@ -343,6 +356,14 @@ function initPanelTabs() {
   document.querySelectorAll('.panel-tab').forEach(tab => tab.addEventListener('click', () => {
     document.querySelectorAll('.panel-tab').forEach(item => item.classList.toggle('is-active', item === tab));
     ['orders','catalog','messages','workers'].forEach(name => { document.querySelector(`#${name}-panel`).hidden = tab.dataset.panel !== name; });
+    const employeePanel = ['workers', 'messages'].includes(tab.dataset.panel);
+    const section = employeePanel ? 'employees' : 'orders';
+    const url = new URL(location.href);
+    url.searchParams.set('section', section);
+    history.replaceState({}, '', url);
+    document.querySelector('#dashboard-title').textContent = employeePanel ? 'Gestión de empleados' : 'Gestión minera';
+    document.querySelectorAll('.orders-link').forEach(link => link.toggleAttribute('aria-current', !employeePanel));
+    document.querySelectorAll('.employees-link').forEach(link => link.toggleAttribute('aria-current', employeePanel));
   }));
 }
 
@@ -493,8 +514,11 @@ async function changeWorkerRole(event) {
 
 async function loadAdminProducts() {
   await loadProducts(true); renderAdminProducts();
-  document.querySelector('#product-form').addEventListener('submit', saveProduct);
-  document.querySelector('#cancel-product-edit').addEventListener('click', resetProductForm);
+}
+
+function initProductForm() {
+  document.querySelector('#product-form')?.addEventListener('submit', saveProduct);
+  document.querySelector('#cancel-product-edit')?.addEventListener('click', resetProductForm);
 }
 
 function renderAdminProducts() {
@@ -561,8 +585,9 @@ function showQueryToast() {
 }
 
 async function start() {
-  initNavigation(); initCarousel(); await loadSession();
+  initNavigation(); initCarousel(); initNumericInputs(); await loadSession();
   createCartDrawer();
+  initProductForm();
   await initCatalog(); await initAccountPage(); await initPanel(); initInquiryForm();
   showQueryToast();
 }
