@@ -1,3 +1,5 @@
+drop policy if exists "inquiries_public_insert" on public.inquiries;
+
 do $$
 begin
   if exists (select 1 from public.profiles where phone !~ '^[0-9]{10}$') then
@@ -16,8 +18,6 @@ end $$;
 alter table public.profiles drop constraint if exists profiles_phone_check;
 alter table public.orders drop constraint if exists orders_phone_check;
 alter table public.inquiries drop constraint if exists inquiries_phone_check;
-
-drop policy if exists "inquiries_public_insert" on public.inquiries;
 
 alter table public.profiles alter column phone type varchar(10);
 alter table public.orders alter column phone type varchar(10);

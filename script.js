@@ -517,13 +517,54 @@ async function loadAdminProducts() {
 }
 
 function initProductForm() {
-  document.querySelector('#product-form')?.addEventListener('submit', saveProduct);
+  const form = document.querySelector('#product-form');
+  if (!form) return;
+  form.addEventListener('submit', saveProduct);
   document.querySelector('#cancel-product-edit')?.addEventListener('click', resetProductForm);
+  form.elements.image_url.addEventListener('input', updateProductFormPreview);
+  updateProductFormPreview();
+}
+
+function showImagePreview(container, url, statusTarget = null) {
+  if (!container) return;
+  const image = container.querySelector('img');
+  const errorMessage = container.querySelector('.image-preview-error');
+  const source = String(url || '').trim();
+  const showError = message => {
+    container.classList.add('is-error');
+    image.hidden = true;
+    errorMessage.hidden = false;
+    if (statusTarget) { statusTarget.textContent = message; statusTarget.className = 'image-preview-status is-error'; }
+  };
+  container.classList.remove('is-error');
+  image.hidden = false;
+  errorMessage.hidden = true;
+  if (statusTarget) { statusTarget.textContent = 'Comprobando imagen…'; statusTarget.className = 'image-preview-status'; }
+  if (!source) { image.removeAttribute('src'); showError('Escribe una URL para comprobar la imagen.'); return; }
+  image.onload = () => {
+    container.classList.remove('is-error');
+    image.hidden = false;
+    errorMessage.hidden = true;
+    if (statusTarget) { statusTarget.textContent = 'Imagen disponible.'; statusTarget.className = 'image-preview-status is-valid'; }
+  };
+  image.onerror = () => showError('La imagen no se puede cargar. Revisa la URL antes de guardar.');
+  image.src = source;
+}
+
+function updateProductFormPreview() {
+  const form = document.querySelector('#product-form');
+  if (!form) return;
+  showImagePreview(
+    document.querySelector('#product-preview-frame'),
+    form.elements.image_url.value,
+    document.querySelector('#product-image-status')
+  );
 }
 
 function renderAdminProducts() {
   const target = document.querySelector('#admin-products');
-  target.innerHTML = products.map(product => `<article class="admin-product-row"><div><h3>${escapeHTML(product.name)} · ${money(product.price)}</h3><p>${escapeHTML(product.category)}${product.active ? '' : ' · Oculto'}</p></div><div class="row-actions"><button type="button" data-edit-product="${product.id}">Editar</button><button class="danger" type="button" data-delete-product="${product.id}">Eliminar</button></div></article>`).join('');
+  target.innerHTML = products.map(product => `<article class="admin-product-row"><div class="admin-product-thumb image-preview-frame" data-image-url="${escapeHTML(product.image_url || '')}"><img alt="Vista previa de ${escapeHTML(product.name)}"><span class="image-preview-error" hidden>Sin imagen</span></div><div><h3>${escapeHTML(product.name)} · ${money(product.price)}</h3><p>${escapeHTML(product.category)}${product.active ? '' : ' · Oculto'}</p></div><div class="row-actions"><button type="button" data-edit-product="${product.id}">Editar</button><button class="danger" type="button" data-delete-product="${product.id}">Eliminar</button></div></article>`).join('');
+  target.querySelectorAll('[data-image-url]').forEach(preview => showImagePreview(preview, preview.dataset.imageUrl));
   target.querySelectorAll('[data-edit-product]').forEach(button => button.addEventListener('click', editProduct));
   target.querySelectorAll('[data-delete-product]').forEach(button => button.addEventListener('click', deleteProduct));
 }
@@ -540,12 +581,12 @@ async function saveProduct(event) {
 function editProduct(event) {
   const product = products.find(item => String(item.id) === event.currentTarget.dataset.editProduct); const form = document.querySelector('#product-form');
   ['id','name','price','category','image_url','description'].forEach(key => form.elements[key].value = product[key] ?? '');
-  document.querySelector('#product-form-title').textContent = 'Editar material'; document.querySelector('#cancel-product-edit').hidden = false; form.scrollIntoView({ behavior:'smooth' });
+  document.querySelector('#product-form-title').textContent = 'Editar material'; document.querySelector('#cancel-product-edit').hidden = false; updateProductFormPreview(); form.scrollIntoView({ behavior:'smooth' });
 }
 
 function resetProductForm() {
   const form = document.querySelector('#product-form'); form.reset(); form.elements.id.value = ''; form.elements.image_url.value = 'assets/logo.png';
-  document.querySelector('#product-form-title').textContent = 'Añadir material'; document.querySelector('#cancel-product-edit').hidden = true;
+  document.querySelector('#product-form-title').textContent = 'Añadir material'; document.querySelector('#cancel-product-edit').hidden = true; updateProductFormPreview();
 }
 
 async function deleteProduct(event) {
