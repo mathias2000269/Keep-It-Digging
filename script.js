@@ -1,13 +1,29 @@
+// 1. Configuracion de Supabase
+// Lee los datos de config.js y crea el cliente "db". Cada vez que veas db.from,
+// db.auth, db.rpc o db.functions.invoke, el script esta hablando con Supabase.
 const config = window.KID_CONFIG || {};
 const backendReady = config.supabaseUrl?.startsWith('https://') && !config.supabaseAnonKey?.startsWith('PEGA_');
 const db = backendReady && window.supabase ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey) : null;
 
+// 2. Utilidades generales
+// money formatea precios, escapeHTML evita que textos de usuarios/productos se
+// conviertan en HTML peligroso, y normalizeUsername limpia nombres de usuario.
 const money = value => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(value || 0));
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
+
+// 3. Estados y roles
+// En la base de datos se guardan valores cortos como "pending" o "boss".
+// Estos mapas los convierten en textos claros para mostrarlos en la web.
 const statusNames = { pending:'Pendiente', preparing:'Preparando', ready:'Listo', completed:'Completado', cancelled:'Cancelado' };
 const roleNames = { customer:'Cliente', worker:'Trabajador', boss:'Jefe', admin:'Administrador' };
+
+// staffRoles puede entrar al panel de trabajo. managementRoles puede gestionar
+// catalogo, empleados, solicitudes y dudas. "boss" ve lo mismo que admin.
 const staffRoles = ['worker', 'boss', 'admin'];
 const managementRoles = ['boss', 'admin'];
+
+// Supabase Auth necesita email, pero la web usa usuario + contrasena.
+// Creamos un email interno que el usuario nunca ve.
 const hiddenLoginEmail = username => `${normalizeUsername(username)}@users.keepitdigging.invalid`;
 function normalizeUsername(value) {
   return String(value || '')
@@ -21,6 +37,10 @@ function normalizeUsername(value) {
     .replace(/^[._-]+|[._-]+$/g, '')
     .slice(0, 24);
 }
+
+// 4. Productos de emergencia
+// Si Supabase no esta configurado o falla, la tienda usa estos materiales para
+// no quedarse vacia. Los productos reales vienen de la tabla "products".
 const defaultProducts = [
   { id:1, name:'Hierro', price:85, category:'Metal industrial', image_url:'assets/logo.png', description:'Resistente, versátil y preparado para cualquier proyecto.' },
   { id:2, name:'Cobre', price:120, category:'Metal conductor', image_url:'assets/logo.png', description:'Perfecto para cableado, componentes y encargos especiales.' },
@@ -29,6 +49,10 @@ const defaultProducts = [
   { id:5, name:'Plata', price:310, category:'Metal precioso', image_url:'assets/logo.png', description:'Elegante, limpia y seleccionada a mano.' },
   { id:6, name:'Diamante', price:950, category:'Gema premium', image_url:'assets/logo.png', description:'Difícil de encontrar e imposible de ignorar.' }
 ];
+
+// 5. Estado temporal de la pagina
+// Estas variables son la memoria viva del script mientras el usuario navega:
+// sesion actual, perfil, productos cargados, carrito, pedidos y filtros.
 let currentSession = null;
 let currentProfile = null;
 let products = [];
@@ -38,6 +62,9 @@ let activeOrderFilter = 'all';
 let inquiries = [];
 let activeInquiryFilter = 'all';
 
+// 6. Avisos flotantes
+// Crea notificaciones apiladas. Por eso si anades varios materiales rapido,
+// cada mensaje aparece encima/anadido al stack y no reemplaza al anterior.
 function toast(message, error = false) {
   let stack = document.querySelector('.toast-stack');
   if (!stack) {
@@ -57,6 +84,9 @@ function toast(message, error = false) {
   }, 3200);
 }
 
+// 7. Navegacion principal
+// Controla el menu movil, marca el enlace de la pagina actual y prepara el
+// boton del perfil que abre el menu de cuenta.
 function initNavigation() {
   const menuButton = document.querySelector('.menu-toggle');
   const nav = document.querySelector('.main-nav');
@@ -82,6 +112,9 @@ function initNavigation() {
   });
 }
 
+// 8. Inputs numericos
+// Limpia automaticamente letras y simbolos en campos de telefono. La regla de
+// "exactamente 10 numeros" se valida despues con /^[0-9]{10}$/.
 function initNumericInputs() {
   document.addEventListener('input', event => {
     if (!event.target.matches('input[type="tel"][inputmode="numeric"]')) return;
@@ -89,6 +122,9 @@ function initNumericInputs() {
   });
 }
 
+// 9. Carrusel de la pagina inicial
+// Cambia las diapositivas cada 5 segundos, salvo si el usuario tiene activada
+// la preferencia de reducir animaciones.
 function initCarousel() {
   const slides = [...document.querySelectorAll('.carousel-slide')];
   const dots = [...document.querySelectorAll('.carousel-dots button')];
@@ -107,6 +143,9 @@ function initCarousel() {
   start();
 }
 
+// 10. Sesion y perfil
+// Pregunta a Supabase si hay un usuario conectado. Si lo hay, busca su fila en
+// "profiles" para saber nombre, usuario, telefono y rol.
 async function loadSession() {
   if (!db) return;
   const { data } = await db.auth.getSession();
@@ -119,6 +158,9 @@ async function loadSession() {
   db.auth.onAuthStateChange((_event, session) => { currentSession = session; if (!session) currentProfile = null; updateRoleUI(); });
 }
 
+// 11. Visibilidad segun rol
+// Oculta o muestra enlaces del menu dependiendo de si el usuario es trabajador,
+// jefe o administrador. Esto es visual; la seguridad real esta en Supabase.
 function updateRoleUI() {
   const staff = staffRoles.includes(currentProfile?.role);
   const management = managementRoles.includes(currentProfile?.role);
@@ -126,6 +168,9 @@ function updateRoleUI() {
   document.querySelectorAll('.employees-link').forEach(link => link.hidden = !management);
 }
 
+// 12. Menu de cuenta
+// Construye el desplegable del icono de usuario: perfil, gestionar trabajo,
+// cerrar sesion, iniciar sesion o crear cuenta segun el estado actual.
 function showAccountMenu(event) {
   event.stopPropagation();
   document.querySelector('.account-menu')?.remove();
@@ -141,6 +186,9 @@ function showAccountMenu(event) {
   setTimeout(() => document.addEventListener('click', () => menu.remove(), { once:true }), 0);
 }
 
+// 13. Carga de productos
+// Lee la tabla "products". En tienda solo trae activos; en admin puede traer
+// tambien inactivos/ocultos con includeInactive = true.
 async function loadProducts(includeInactive = false) {
   if (!db) { products = defaultProducts; return products; }
   let query = db.from('products').select('*').order('id');
@@ -151,6 +199,9 @@ async function loadProducts(includeInactive = false) {
   return products;
 }
 
+// 14. Catalogo publico
+// Pinta las tarjetas de productos en #product-grid y conecta el boton
+// "Anadir al carro" con la funcion addToCart.
 async function initCatalog() {
   const grid = document.querySelector('#product-grid');
   if (!grid) return;
@@ -164,6 +215,9 @@ async function initCatalog() {
   });
 }
 
+// 15. Carrito: guardar y anadir productos
+// El carrito vive en localStorage para no perderse al recargar. saveCart
+// actualiza el contador superior y vuelve a pintar el drawer.
 function saveCart() {
   localStorage.setItem('kid-cart', JSON.stringify(cart));
   document.querySelectorAll('.cart-count').forEach(element => element.textContent = cart.reduce((sum, item) => sum + item.quantity, 0));
@@ -177,6 +231,9 @@ function addToCart(product) {
   saveCart(); toast(`${product.name} añadido al carrito.`);
 }
 
+// 16. Drawer del carrito
+// Crea el panel lateral del carrito en todas las paginas y conecta abrir,
+// cerrar, cambiar cantidades, eliminar productos y confirmar compra.
 function createCartDrawer() {
   if (document.querySelector('.cart-drawer')) return;
   document.body.insertAdjacentHTML('beforeend', `<div class="drawer-backdrop"></div><aside class="cart-drawer" aria-label="Carrito" aria-hidden="true"><div class="drawer-heading"><h2>Tu carrito</h2><button class="drawer-close" type="button" aria-label="Cerrar carrito">×</button></div><div class="cart-items"></div><div class="cart-checkout"><div class="cart-total"><span>Total</span><strong>$0</strong></div><div class="cart-customer-fields"><input id="checkout-name" type="text" placeholder="Nombre completo" aria-label="Nombre completo"><input id="checkout-phone" type="tel" inputmode="numeric" pattern="[0-9]{10}" placeholder="Teléfono" aria-label="Teléfono"><textarea id="checkout-notes" rows="2" placeholder="Notas o lugar de entrega" aria-label="Notas"></textarea></div><button class="submit-button checkout-button" type="button">Confirmar compra <span>↗</span></button></div></aside>`);
@@ -234,6 +291,9 @@ function changeCartFromInput(event) {
   saveCart();
 }
 
+// 17. Confirmar compra
+// Valida nombre y telefono, transforma el carrito en items simples y llama a
+// la funcion SQL "place_order", que crea el pedido y sus lineas en Supabase.
 async function checkout() {
   if (!cart.length) return toast('Añade algún producto antes de comprar.', true);
   if (!db) return toast('No se pudo completar el pedido en este momento.', true);
@@ -251,6 +311,9 @@ async function checkout() {
   toast(currentSession ? 'Pedido realizado con éxito.' : 'Pedido enviado. Te buscaremos por tu nombre y teléfono.');
 }
 
+// 18. Pestanas de acceso
+// Separa visualmente iniciar sesion y crear cuenta. Cuando una pestana esta
+// activa, el otro formulario queda oculto.
 function initAuthTabs() {
   const tabs = document.querySelectorAll('.auth-tab');
   tabs.forEach(tab => tab.addEventListener('click', () => {
@@ -271,6 +334,9 @@ function initAuthTabs() {
   if (new URLSearchParams(location.search).get('registro')) document.querySelector('[data-auth-tab="register"]')?.click();
 }
 
+// 19. Pagina de cuenta
+// Si ya hay sesion, muestra perfil. Si no, prepara login y registro. El login
+// usa usuario + contrasena, aunque internamente Supabase Auth recibe un email oculto.
 async function initAccountPage() {
   if (!document.querySelector('.account-page')) return;
   initAuthTabs();
@@ -313,6 +379,9 @@ async function initAccountPage() {
 
 function setAuthMessage(message) { const target = document.querySelector('#auth-message'); if (target) target.textContent = message; }
 
+// 20. Perfil del usuario
+// Muestra datos del perfil, pedidos propios y el estado/formulario de solicitud
+// de trabajo. Solo las cuentas customer pueden enviar solicitud.
 async function showProfile() {
   document.querySelector('#auth-view').hidden = true;
   document.querySelector('#profile-view').hidden = false;
@@ -333,6 +402,9 @@ async function showProfile() {
   });
 }
 
+// 21. Panel de trabajo
+// Protege la pagina del panel: solo worker, boss y admin entran. Boss y admin
+// cargan tambien catalogo, solicitudes, dudas y gestion de trabajadores.
 async function initPanel() {
   if (!document.querySelector('.admin-page')) return;
   const denied = document.querySelector('#access-denied');
@@ -352,6 +424,9 @@ async function initPanel() {
   document.querySelector(`.panel-tab[data-panel="${initialPanel}"]`)?.click();
 }
 
+// 22. Pestanas principales del panel
+// Alterna entre pedidos, catalogo, mensajes y trabajadores. Tambien actualiza
+// la URL con ?section=orders o ?section=employees sin recargar la pagina.
 function initPanelTabs() {
   document.querySelectorAll('.panel-tab').forEach(tab => tab.addEventListener('click', () => {
     document.querySelectorAll('.panel-tab').forEach(item => item.classList.toggle('is-active', item === tab));
@@ -367,6 +442,9 @@ function initPanelTabs() {
   }));
 }
 
+// 23. Subpestanas y filtros del panel
+// Controlan los filtros de pedidos y la vista de solicitudes/dudas dentro del
+// panel de mensajes.
 function initMessageTabs() {
   document.querySelectorAll('.secondary-tab').forEach(tab => tab.addEventListener('click', () => {
     document.querySelectorAll('.secondary-tab').forEach(item => item.classList.toggle('is-active', item === tab));
@@ -391,12 +469,18 @@ function initOrderFilters() {
   }));
 }
 
+// 24. Pedidos del equipo
+// Carga todos los pedidos con sus order_items, los guarda en staffOrders y
+// refresca tarjetas, materiales necesarios y estadisticas.
 async function loadStaffOrders() {
   const { data, error } = await db.from('orders').select('*, order_items(*)').order('created_at', { ascending:false });
   if (error) return toast('No se pudieron cargar los pedidos.', true);
   staffOrders = data || []; renderStaffOrders(); renderMaterialsNeeded(); renderStats();
 }
 
+// 25. Render de pedidos
+// Pinta cada pedido interno con cliente, telefono, productos, total, estado y
+// boton de borrado. Despues conecta los selects y botones recien creados.
 function renderStaffOrders() {
   const target = document.querySelector('#staff-orders'); if (!target) return;
   const visible = activeOrderFilter === 'all' ? staffOrders : staffOrders.filter(order => order.status === activeOrderFilter);
@@ -406,6 +490,9 @@ function renderStaffOrders() {
   target.querySelectorAll('[data-delete-order]').forEach(button => button.addEventListener('click', deleteOrder));
 }
 
+// 26. Cambiar estado y borrar pedidos
+// Actualiza Supabase y despues actualiza la copia local para que la pantalla no
+// se quede antigua.
 async function updateOrderStatus(event) {
   const { error } = await db.from('orders').update({ status:event.target.value }).eq('id', event.target.dataset.orderStatus);
   if (error) return toast('No se pudo cambiar el estado.', true);
@@ -421,6 +508,9 @@ async function deleteOrder(event) {
   staffOrders = staffOrders.filter(order => order.id !== id); renderStaffOrders(); renderMaterialsNeeded(); renderStats(); toast('Pedido eliminado.');
 }
 
+// 27. Materiales necesarios y estadisticas
+// Suma cantidades de pedidos pendientes/preparando y calcula ingresos de los
+// ultimos 7 dias solo con pedidos completados.
 function renderMaterialsNeeded() {
   const totals = {};
   staffOrders.filter(order => ['pending','preparing'].includes(order.status)).forEach(order => order.order_items.forEach(item => { totals[item.product_name] = (totals[item.product_name] || 0) + item.quantity; }));
@@ -436,6 +526,9 @@ function renderStats() {
   document.querySelector('#active-orders').textContent = staffOrders.filter(order => ['pending','preparing','ready'].includes(order.status)).length;
 }
 
+// 28. Solicitudes de trabajo
+// Carga solicitudes pendientes/aceptadas/rechazadas. Al aceptar, se puede dar
+// rol worker o boss mediante la funcion SQL review_application.
 async function loadApplications() {
   const { data, error } = await db.from('job_applications').select('*').order('created_at', { ascending:false });
   if (error) return;
@@ -446,6 +539,9 @@ async function loadApplications() {
   target.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
 }
 
+// 29. Dudas y mensajes de contacto
+// Carga la tabla inquiries para que admin/jefe pueda marcar dudas como
+// resueltas, reabrirlas o eliminarlas.
 async function loadInquiries() {
   const { data, error } = await db.from('inquiries').select('*').order('created_at', { ascending:false });
   if (error) return toast('No se pudieron cargar las dudas.', true);
@@ -488,6 +584,9 @@ async function reviewApplication(event) {
   toast('Solicitud actualizada.'); await loadApplications();
 }
 
+// 30. Trabajadores y jefes
+// Lista perfiles con rol worker o boss. Permite cambiar entre trabajador/jefe
+// o quitar permisos para devolver la cuenta a customer.
 async function loadWorkers() {
   const { data, error } = await db.from('profiles').select('id, full_name, username, role, created_at').in('role', ['worker', 'boss']).order('full_name');
   if (error) return toast('No se pudo cargar el equipo.', true);
@@ -497,6 +596,7 @@ async function loadWorkers() {
   target.querySelectorAll('[data-remove-worker]').forEach(button => button.addEventListener('click', removeWorker));
 }
 
+// No borra la cuenta del usuario: solo le cambia el rol a customer.
 async function removeWorker(event) {
   if (!confirm('¿Quitar a esta persona el acceso de trabajador? Su cuenta seguirá existiendo como cliente.')) return;
   const { error } = await db.from('profiles').update({ role:'customer' }).eq('id', event.currentTarget.dataset.removeWorker).in('role', ['worker', 'boss']);
@@ -512,10 +612,16 @@ async function changeWorkerRole(event) {
   await loadWorkers();
 }
 
+// 31. Catalogo admin
+// Carga todos los productos, incluidos ocultos/inactivos, para que admin/jefe
+// pueda revisar, editar o borrar materiales desde el panel.
 async function loadAdminProducts() {
   await loadProducts(true); renderAdminProducts();
 }
 
+// 32. Formulario de materiales
+// Conecta el formulario de crear/editar material y actualiza la vista previa de
+// imagen en vivo mientras se escribe la URL.
 function initProductForm() {
   const form = document.querySelector('#product-form');
   if (!form) return;
@@ -525,6 +631,9 @@ function initProductForm() {
   updateProductFormPreview();
 }
 
+// 33. Vista previa de imagenes
+// Intenta cargar la URL en un <img>. Si carga, marca la imagen como disponible;
+// si falla, ensena un aviso para detectar enlaces rotos antes de publicar.
 function showImagePreview(container, url, statusTarget = null) {
   if (!container) return;
   const image = container.querySelector('img');
@@ -561,6 +670,9 @@ function updateProductFormPreview() {
   );
 }
 
+// 34. Lista admin de materiales
+// Pinta cada material con miniatura, precio, categoria y acciones. La miniatura
+// tambien usa showImagePreview para detectar imagenes rotas en la lista.
 function renderAdminProducts() {
   const target = document.querySelector('#admin-products');
   target.innerHTML = products.map(product => `<article class="admin-product-row"><div class="admin-product-thumb image-preview-frame" data-image-url="${escapeHTML(product.image_url || '')}"><img alt="Vista previa de ${escapeHTML(product.name)}"><span class="image-preview-error" hidden>Sin imagen</span></div><div><h3>${escapeHTML(product.name)} · ${money(product.price)}</h3><p>${escapeHTML(product.category)}${product.active ? '' : ' · Oculto'}</p></div><div class="row-actions"><button type="button" data-edit-product="${product.id}">Editar</button><button class="danger" type="button" data-delete-product="${product.id}">Eliminar</button></div></article>`).join('');
@@ -569,6 +681,9 @@ function renderAdminProducts() {
   target.querySelectorAll('[data-delete-product]').forEach(button => button.addEventListener('click', deleteProduct));
 }
 
+// 35. Guardar material
+// Si el campo hidden id tiene valor, actualiza un producto existente. Si no lo
+// tiene, inserta uno nuevo en la tabla products.
 async function saveProduct(event) {
   event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
   const payload = { name:data.get('name').trim(), price:Number(data.get('price')), category:data.get('category').trim(), image_url:data.get('image_url').trim(), description:data.get('description').trim(), active:true };
@@ -578,17 +693,21 @@ async function saveProduct(event) {
   toast(id ? 'Material actualizado.' : 'Material añadido.'); resetProductForm(); await loadAdminProducts();
 }
 
+// Rellena el formulario con los datos del producto seleccionado para editarlo.
 function editProduct(event) {
   const product = products.find(item => String(item.id) === event.currentTarget.dataset.editProduct); const form = document.querySelector('#product-form');
   ['id','name','price','category','image_url','description'].forEach(key => form.elements[key].value = product[key] ?? '');
   document.querySelector('#product-form-title').textContent = 'Editar material'; document.querySelector('#cancel-product-edit').hidden = false; updateProductFormPreview(); form.scrollIntoView({ behavior:'smooth' });
 }
 
+// Limpia el formulario y vuelve al modo "Anadir material".
 function resetProductForm() {
   const form = document.querySelector('#product-form'); form.reset(); form.elements.id.value = ''; form.elements.image_url.value = 'assets/logo.png';
   document.querySelector('#product-form-title').textContent = 'Añadir material'; document.querySelector('#cancel-product-edit').hidden = true; updateProductFormPreview();
 }
 
+// Intenta borrar el producto. Si ya aparece en pedidos, Supabase puede impedirlo
+// para no romper el historial de pedidos antiguos.
 async function deleteProduct(event) {
   if (!confirm('¿Eliminar este material del catálogo?')) return;
   const { error } = await db.from('products').delete().eq('id', event.currentTarget.dataset.deleteProduct);
@@ -596,6 +715,9 @@ async function deleteProduct(event) {
   toast('Material eliminado.'); await loadAdminProducts();
 }
 
+// 36. Formulario publico de dudas
+// Envia consultas a la tabla inquiries. Valida que el telefono sean exactamente
+// 10 numeros antes de intentar guardar.
 function initInquiryForm() {
   const form = document.querySelector('#inquiry-form');
   if (!form) return;
@@ -619,12 +741,18 @@ function initInquiryForm() {
   });
 }
 
+// 37. Avisos por parametros de URL
+// Permite mostrar avisos o abrir el carrito cuando la pagina viene con
+// parametros como ?duda=ok o ?carrito=1.
 function showQueryToast() {
   const params = new URLSearchParams(location.search);
   if (params.get('duda') === 'ok') { toast('Duda enviada con éxito.'); history.replaceState({}, '', location.pathname); }
   if (params.get('carrito') === '1') setTimeout(openCart, 250);
 }
 
+// 38. Arranque general
+// Este es el orden en el que se enciende la web. Cada init comprueba si su zona
+// existe, por eso el mismo script sirve para inicio, productos, cuenta y panel.
 async function start() {
   initNavigation(); initCarousel(); initNumericInputs(); await loadSession();
   createCartDrawer();
