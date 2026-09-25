@@ -499,13 +499,15 @@ async function submitClaim(event) {
   if (message.length < 5) return toast('Explica el motivo de la reclamación.', true);
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true; button.textContent = 'Enviando…';
-  const { error } = await db.from('order_claims').insert({
-    order_id:form.dataset.claimForm,
-    user_id:currentSession.user.id,
-    message,
+  const { error } = await db.rpc('create_order_claim', {
+    p_order_id:form.dataset.claimForm,
+    p_message:message,
   });
   button.disabled = false; button.textContent = 'Enviar reclamación';
-  if (error) return toast(error.code === '23505' ? 'Este pedido ya tiene una reclamación pendiente.' : 'No se pudo enviar la reclamación.', true);
+  if (error) {
+    const duplicate = error.code === '23505' || error.message?.includes('reclamación pendiente');
+    return toast(duplicate ? 'Este pedido ya tiene una reclamación pendiente.' : error.message || 'No se pudo enviar la reclamación.', true);
+  }
   toast('Reclamación enviada a la empresa.');
   await loadCustomerOrders();
 }
