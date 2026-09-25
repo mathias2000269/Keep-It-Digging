@@ -527,7 +527,7 @@ async function initPanel() {
   const isManagement = managementRoles.includes(currentProfile.role);
   document.querySelector('#admin-stats').hidden = !isManagement;
   document.querySelectorAll('.management-only').forEach(element => element.hidden = !isManagement);
-  initPanelTabs(); initOrderFilters(); initMessageTabs(isManagement); initInquiryFilters(); initClaimFilters(); initExpenseForm();
+  initPanelTabs(); initOrderFilters(); initMessageTabs(); initTeamTabs(); initInquiryFilters(); initClaimFilters(); initExpenseForm();
   await loadStaffOrders();
   await loadInquiries();
   await loadClaims();
@@ -557,16 +557,31 @@ function initPanelTabs() {
 }
 
 // 23. Subpestanas y filtros del panel
-// Controlan los filtros de pedidos y la vista de solicitudes/dudas dentro del
-// panel de mensajes.
-function initMessageTabs(isManagement) {
-  document.querySelectorAll('.secondary-tab').forEach(tab => tab.addEventListener('click', () => {
-    document.querySelectorAll('.secondary-tab').forEach(item => item.classList.toggle('is-active', item === tab));
-    document.querySelector('#applications-view').hidden = tab.dataset.messagePanel !== 'applications';
+// Controlan las vistas de dudas/reclamaciones y solicitudes/mi equipo.
+function initMessageTabs() {
+  document.querySelectorAll('[data-message-panel]').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-message-panel]').forEach(item => item.classList.toggle('is-active', item === tab));
     document.querySelector('#inquiries-view').hidden = tab.dataset.messagePanel !== 'inquiries';
     document.querySelector('#claims-view').hidden = tab.dataset.messagePanel !== 'claims';
   }));
-  document.querySelector(`[data-message-panel="${isManagement ? 'applications' : 'inquiries'}"]`)?.click();
+  document.querySelector('[data-message-panel="inquiries"]')?.click();
+}
+
+function initTeamTabs() {
+  document.querySelectorAll('[data-team-panel]').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-team-panel]').forEach(item => item.classList.toggle('is-active', item === tab));
+    document.querySelector('#applications-view').hidden = tab.dataset.teamPanel !== 'applications';
+    document.querySelector('#team-view').hidden = tab.dataset.teamPanel !== 'roster';
+  }));
+  document.querySelector('[data-team-panel="applications"]')?.click();
+}
+
+function updateMessagePanelCount() {
+  const count = inquiries.filter(item => item.status === 'new').length + claims.filter(item => item.status === 'new').length;
+  const badge = document.querySelector('#messages-panel-count');
+  if (!badge) return;
+  badge.textContent = count;
+  badge.hidden = count === 0;
 }
 
 function initInquiryFilters() {
@@ -659,8 +674,12 @@ function renderStats() {
 async function loadApplications() {
   const { data, error } = await db.from('job_applications').select('*').eq('status', 'pending').order('created_at', { ascending:false });
   if (error) return;
-  document.querySelector('#pending-applications').textContent = data.filter(item => item.status === 'pending').length;
-  document.querySelector('#application-tab-count').textContent = data.filter(item => item.status === 'pending').length;
+  const pending = data.filter(item => item.status === 'pending').length;
+  document.querySelector('#pending-applications').textContent = pending;
+  document.querySelector('#application-tab-count').textContent = pending;
+  const teamBadge = document.querySelector('#team-panel-count');
+  teamBadge.textContent = pending;
+  teamBadge.hidden = pending === 0;
   const target = document.querySelector('#applications-list');
   target.innerHTML = data.length ? data.map(item => `<article class="application-card"><div><h3>${escapeHTML(item.applicant_name)}</h3><p>${new Date(item.created_at).toLocaleDateString('es-ES')} · ${item.status}</p><p>${escapeHTML(item.message || 'Sin mensaje')}</p></div><div class="row-actions"><button class="approve" data-review="approved" data-role="worker" data-id="${item.id}" type="button">Aceptar como trabajador</button><button class="approve" data-review="approved" data-role="boss" data-id="${item.id}" type="button">Aceptar como jefe</button><button data-review="pending" data-id="${item.id}" type="button">En espera</button><button class="danger" data-review="rejected" data-id="${item.id}" type="button">Rechazar</button></div></article>`).join('') : '<p class="loading-message">No hay solicitudes.</p>';
   target.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
@@ -677,6 +696,7 @@ async function loadInquiries() {
   const pendingTarget = document.querySelector('#pending-inquiries');
   if (pendingTarget) pendingTarget.textContent = pending;
   document.querySelector('#inquiry-tab-count').textContent = pending;
+  updateMessagePanelCount();
   renderInquiries();
 }
 
@@ -725,6 +745,7 @@ async function loadClaims() {
   claims = data || [];
   const pending = claims.filter(item => item.status === 'new').length;
   document.querySelector('#claim-tab-count').textContent = pending;
+  updateMessagePanelCount();
   renderClaims();
 }
 
@@ -735,9 +756,10 @@ function renderClaims() {
   target.innerHTML = visible.length ? visible.map(item => {
     const order = item.orders;
     const products = order?.order_items?.map(product => `${product.quantity}× ${escapeHTML(product.product_name)}`).join('<br>') || 'Pedido no disponible';
-    return `<article class="application-card inquiry-card claim-card${item.status === 'resolved' ? ' is-resolved' : ''}"><div><h3>Reclamación · pedido ${escapeHTML(String(item.order_id).slice(0, 8).toUpperCase())}</h3><p>${new Date(item.created_at).toLocaleString('es-ES')}${order ? ` · ${escapeHTML(order.customer_name)} · Tel. ${escapeHTML(order.phone)}` : ''}</p>${order ? `<div class="claim-order-data"><p>${products}</p><strong>${money(order.total)}</strong><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div>` : ''}<p class="inquiry-text">${escapeHTML(item.message)}</p></div><div class="row-actions">${item.status === 'new' ? `<button class="approve" type="button" data-claim-status="resolved" data-id="${item.id}">Marcar resuelta</button>` : `<button type="button" data-claim-status="new" data-id="${item.id}">Reabrir</button>`}</div></article>`;
+    return `<article class="application-card inquiry-card claim-card${item.status === 'resolved' ? ' is-resolved' : ''}"><div><h3>Reclamación · pedido ${escapeHTML(String(item.order_id).slice(0, 8).toUpperCase())}</h3><p>${new Date(item.created_at).toLocaleString('es-ES')}${order ? ` · ${escapeHTML(order.customer_name)} · Tel. ${escapeHTML(order.phone)}` : ''}</p>${order ? `<div class="claim-order-data"><p>${products}</p><strong>${money(order.total)}</strong><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div>` : ''}<p class="inquiry-text">${escapeHTML(item.message)}</p></div><div class="row-actions">${item.status === 'new' ? `<button class="approve" type="button" data-claim-status="resolved" data-id="${item.id}">Marcar resuelta</button>` : `<button type="button" data-claim-status="new" data-id="${item.id}">Reabrir</button>`}<button class="danger" type="button" data-delete-claim="${item.id}">Eliminar</button></div></article>`;
   }).join('') : '<p class="loading-message">No hay reclamaciones en esta sección.</p>';
   target.querySelectorAll('[data-claim-status]').forEach(button => button.addEventListener('click', updateClaimStatus));
+  target.querySelectorAll('[data-delete-claim]').forEach(button => button.addEventListener('click', deleteClaim));
 }
 
 async function updateClaimStatus(event) {
@@ -745,6 +767,15 @@ async function updateClaimStatus(event) {
   const { error } = await db.from('order_claims').update({ status }).eq('id', event.currentTarget.dataset.id);
   if (error) return toast('No se pudo actualizar la reclamación.', true);
   toast(status === 'resolved' ? 'Reclamación marcada como resuelta.' : 'Reclamación reabierta.');
+  await loadClaims();
+  await loadStaffOrders();
+}
+
+async function deleteClaim(event) {
+  if (!confirm('¿Eliminar esta reclamación definitivamente? Un pedido que siga activo no se eliminará.')) return;
+  const { error } = await db.rpc('delete_order_claim', { p_claim_id:event.currentTarget.dataset.deleteClaim });
+  if (error) return toast(error.message || 'No se pudo eliminar la reclamación.', true);
+  toast('Reclamación eliminada.');
   await loadClaims();
   await loadStaffOrders();
 }
