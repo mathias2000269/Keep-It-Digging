@@ -1085,6 +1085,11 @@ button { border-radius:0; }
   background:#141414;
   color:#fff;
 }
+.password-field { position:relative; display:block; margin-top:8px; }
+.password-field input { margin-top:0!important; padding-right:48px!important; }
+.password-toggle { position:absolute; top:50%; right:5px; width:38px; height:38px; padding:8px; display:grid; place-items:center; transform:translateY(-50%); border:0; background:transparent; color:#aaa; cursor:pointer; }
+.password-toggle:hover,.password-toggle:focus-visible { color:var(--yellow); }
+.password-toggle svg { width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .form-message { min-height:22px; color:var(--yellow); }
 .optional-label { margin-left:7px; color:#777; font-size:.62rem; }
 .field-help { display:block; margin-top:7px; color:#777; font-size:.68rem; font-weight:500; letter-spacing:0; text-transform:none; }

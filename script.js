@@ -127,6 +127,34 @@ function initNumericInputs() {
   });
 }
 
+// Añade un control de ojo a cualquier contraseña presente ahora o en futuros
+// formularios. El botón alterna entre texto visible y contraseña oculta.
+function initPasswordToggles() {
+  const eye = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const eyeOff = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 6.2A11 11 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3 3.8M6.3 6.3C3.5 8.1 2 12 2 12s3.5 6 10 6a10 10 0 0 0 3.7-.7M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+  document.querySelectorAll('input[type="password"]').forEach(input => {
+    if (input.closest('.password-field')) return;
+    const wrapper = document.createElement('span');
+    wrapper.className = 'password-field';
+    input.before(wrapper);
+    wrapper.append(input);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'password-toggle';
+    button.setAttribute('aria-label', 'Mostrar contraseña');
+    button.setAttribute('aria-pressed', 'false');
+    button.innerHTML = eye;
+    button.addEventListener('click', () => {
+      const visible = input.type === 'text';
+      input.type = visible ? 'password' : 'text';
+      button.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+      button.setAttribute('aria-pressed', String(!visible));
+      button.innerHTML = visible ? eye : eyeOff;
+    });
+    wrapper.append(button);
+  });
+}
+
 // 9. Carrusel de la pagina inicial
 // Cambia las diapositivas cada 5 segundos, salvo si el usuario tiene activada
 // la preferencia de reducir animaciones.
@@ -661,11 +689,17 @@ function renderMaterialsNeeded() {
 }
 
 function renderStats() {
+  const activeOrderCount = staffOrders.filter(order => ['pending','preparing','ready'].includes(order.status)).length;
+  const orderBadge = document.querySelector('#orders-panel-count');
+  if (orderBadge) {
+    orderBadge.textContent = activeOrderCount;
+    orderBadge.hidden = activeOrderCount === 0;
+  }
   if (!managementRoles.includes(currentProfile?.role)) return;
   const grossIncome = revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
   const totalExpenses = expenseLedger.filter(expense => !expense.cancelled_at).reduce((sum, expense) => sum + Number(expense.amount), 0);
   document.querySelector('#total-income').textContent = money(grossIncome - totalExpenses);
-  document.querySelector('#active-orders').textContent = staffOrders.filter(order => ['pending','preparing','ready'].includes(order.status)).length;
+  document.querySelector('#active-orders').textContent = activeOrderCount;
 }
 
 // 28. Solicitudes de trabajo
@@ -681,8 +715,9 @@ async function loadApplications() {
   teamBadge.textContent = pending;
   teamBadge.hidden = pending === 0;
   const target = document.querySelector('#applications-list');
-  target.innerHTML = data.length ? data.map(item => `<article class="application-card"><div><h3>${escapeHTML(item.applicant_name)}</h3><p>${new Date(item.created_at).toLocaleDateString('es-ES')} · ${item.status}</p><p>${escapeHTML(item.message || 'Sin mensaje')}</p></div><div class="row-actions"><button class="approve" data-review="approved" data-role="worker" data-id="${item.id}" type="button">Aceptar como trabajador</button><button class="approve" data-review="approved" data-role="boss" data-id="${item.id}" type="button">Aceptar como jefe</button><button data-review="pending" data-id="${item.id}" type="button">En espera</button><button class="danger" data-review="rejected" data-id="${item.id}" type="button">Rechazar</button></div></article>`).join('') : '<p class="loading-message">No hay solicitudes.</p>';
+  target.innerHTML = data.length ? data.map(item => `<article class="application-card"><div><h3>${escapeHTML(item.applicant_name)}</h3><p>${new Date(item.created_at).toLocaleDateString('es-ES')} · Pendiente</p><p>${escapeHTML(item.message || 'Sin mensaje')}</p></div><div class="row-actions"><button class="approve" data-review="approved" data-role="worker" data-id="${item.id}" type="button">Aceptar como trabajador</button><button class="approve" data-review="approved" data-role="boss" data-id="${item.id}" type="button">Aceptar como jefe</button><button class="danger" data-delete-application="${item.id}" type="button">Eliminar</button></div></article>`).join('') : '<p class="loading-message">No hay solicitudes.</p>';
   target.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
+  target.querySelectorAll('[data-delete-application]').forEach(button => button.addEventListener('click', deleteApplication));
 }
 
 // 29. Dudas y mensajes de contacto
@@ -731,6 +766,14 @@ async function reviewApplication(event) {
   const { error } = await db.rpc('review_application', { p_application_id:event.currentTarget.dataset.id, p_decision:event.currentTarget.dataset.review, p_role:event.currentTarget.dataset.role || 'worker' });
   if (error) return toast('No se pudo revisar la solicitud.', true);
   toast('Solicitud actualizada.'); await loadApplications();
+}
+
+async function deleteApplication(event) {
+  if (!confirm('¿Eliminar esta solicitud de trabajo definitivamente?')) return;
+  const { error } = await db.rpc('delete_job_application', { p_application_id:event.currentTarget.dataset.deleteApplication });
+  if (error) return toast(error.message || 'No se pudo eliminar la solicitud.', true);
+  toast('Solicitud eliminada.');
+  await loadApplications();
 }
 
 // 30. Reclamaciones de pedidos
@@ -1025,7 +1068,7 @@ function showQueryToast() {
 // Este es el orden en el que se enciende la web. Cada init comprueba si su zona
 // existe, por eso el mismo script sirve para inicio, productos, cuenta y panel.
 async function start() {
-  initNavigation(); initCarousel(); initNumericInputs(); await loadSession();
+  initNavigation(); initCarousel(); initNumericInputs(); initPasswordToggles(); await loadSession();
   createCartDrawer();
   initProductForm();
   await initCatalog(); await initAccountPage(); await initPanel(); initInquiryForm();
