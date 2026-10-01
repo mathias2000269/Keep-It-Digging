@@ -66,6 +66,7 @@ let activeClaimFilter = 'all';
 let revenueEntries = [];
 let expenses = [];
 let expenseLedger = [];
+let financialCarryover = { gross_income:0, total_expenses:0 };
 
 // 6. Avisos flotantes
 // Crea notificaciones apiladas. Por eso si anades varios materiales rapido,
@@ -696,8 +697,8 @@ function renderStats() {
     orderBadge.hidden = activeOrderCount === 0;
   }
   if (!managementRoles.includes(currentProfile?.role)) return;
-  const grossIncome = revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const totalExpenses = expenseLedger.filter(expense => !expense.cancelled_at).reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const grossIncome = Number(financialCarryover.gross_income || 0) + revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const totalExpenses = Number(financialCarryover.total_expenses || 0) + expenseLedger.filter(expense => !expense.cancelled_at).reduce((sum, expense) => sum + Number(expense.amount), 0);
   document.querySelector('#total-income').textContent = money(grossIncome - totalExpenses);
   document.querySelector('#active-orders').textContent = activeOrderCount;
 }
@@ -833,15 +834,17 @@ function initExpenseForm() {
 }
 
 async function loadFinancialData() {
-  const [revenueResult, expenseResult, expenseLedgerResult] = await Promise.all([
+  const [revenueResult, expenseResult, expenseLedgerResult, carryoverResult] = await Promise.all([
     db.from('revenue_ledger').select('*').order('completed_at', { ascending:false }),
     db.from('expenses').select('*').order('created_at', { ascending:false }),
     db.from('expense_ledger').select('amount,cancelled_at'),
+    db.from('financial_carryover').select('gross_income,total_expenses').eq('id', 1).maybeSingle(),
   ]);
-  if (revenueResult.error || expenseResult.error || expenseLedgerResult.error) return toast('No se pudieron cargar las cuentas.', true);
+  if (revenueResult.error || expenseResult.error || expenseLedgerResult.error || carryoverResult.error) return toast('No se pudieron cargar las cuentas.', true);
   revenueEntries = revenueResult.data || [];
   expenses = expenseResult.data || [];
   expenseLedger = expenseLedgerResult.data || [];
+  financialCarryover = carryoverResult.data || { gross_income:0, total_expenses:0 };
   renderExpenses();
   renderStats();
 }
@@ -849,9 +852,9 @@ async function loadFinancialData() {
 function renderExpenses() {
   const target = document.querySelector('#expenses-list');
   if (!target) return;
-  const grossIncome = revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const grossIncome = Number(financialCarryover.gross_income || 0) + revenueEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
   const activeExpenses = expenseLedger.filter(expense => !expense.cancelled_at);
-  const totalExpenses = activeExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const totalExpenses = Number(financialCarryover.total_expenses || 0) + activeExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
   document.querySelector('#gross-income').textContent = money(grossIncome);
   document.querySelector('#total-expenses').textContent = money(totalExpenses);
   document.querySelector('#net-income').textContent = money(grossIncome - totalExpenses);

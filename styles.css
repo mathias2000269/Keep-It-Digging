@@ -279,13 +279,6 @@ button, input, textarea, select {
   border-color:var(--yellow);
   transform:translateY(-12px);
 }
-.stars {
-  color:var(--yellow);
-  letter-spacing:.18em;
-}
-.featured .stars {
-  color:#090909;
-}
 .review-card blockquote {
   font-family:var(--display);
   font-size:1.65rem;
